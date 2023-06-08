@@ -19,7 +19,7 @@ Example:
 ApiGenerator api.mypurecloud.de D:\MyProjects\GenesysApi MyNamespace
 ```
 
-This would download the swagger from https://api.mypurecloud.de/api/v2/docs/swagger and generate the code with ```namespace MyNamespace``` in the directory ```D:\MyProjects\GenesysApi````.
+This would download the swagger from https://api.mypurecloud.de/api/v2/docs/swagger and generate the code with ```namespace MyNamespace``` in the directory ```D:\MyProjects\GenesysApi```.
 
 
 
