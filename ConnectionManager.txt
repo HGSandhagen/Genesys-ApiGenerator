@@ -1,0 +1,72 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using System.Net.Http.Json;
+using Microsoft.Extensions.Options;
+
+namespace {TargetNamespace} {
+    public class ConnectionManager {
+        private readonly HttpClient _httpClient;
+        private readonly GenesysCloudCredentials _credentials;
+        private AuthTokenInfo? _tokenInfo;
+        private DateTime _tokenExpiresAt = DateTime.MinValue;
+        public ConnectionManager(IOptions<GenesysCloudCredentials> genesysCloudCredentials) {
+            _credentials = genesysCloudCredentials.Value;
+            _httpClient = new HttpClient {
+                BaseAddress = new Uri($"https://api.{_credentials.Environment}")
+            };
+        }
+        public ConnectionManager(GenesysCloudCredentials genesysCloudCredentials) {
+            _credentials = genesysCloudCredentials;
+            _httpClient = new HttpClient {
+                BaseAddress = new Uri($"https://api.{_credentials.Environment}")
+            };
+        }
+
+        public async Task<HttpClient> GetClient() {
+            await CheckToken();
+            return _httpClient;
+        }
+
+        private async Task CheckToken() {
+            if (_tokenInfo == null || _tokenInfo.AccessToken == null || _tokenExpiresAt < DateTime.Now) {
+                await GetToken();
+            }
+            if (_tokenInfo == null || _tokenInfo.AccessToken == null) {
+                throw new Exception("Token invalid");
+            }
+            if ((_tokenExpiresAt - DateTime.Now).TotalMinutes < 5 && _tokenInfo.RefreshToken != null) {
+                await GetToken(_tokenInfo.RefreshToken);
+            }
+        }
+
+        private async Task GetToken(string? refreshToken = null) {
+            var basicAuthauth = System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{_credentials.ClientId}:{_credentials.ClientSecret}"));
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", basicAuthauth);
+            var form = new List<KeyValuePair<string, string>>();
+            if (string.IsNullOrEmpty(refreshToken)) {
+                form.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
+            }
+            else {
+                form.Add(new KeyValuePair<string, string>("grant_type", "refresh_token"));
+                form.Add(new KeyValuePair<string, string>("refresh_token", refreshToken));
+            }
+
+            var response = await _httpClient.PostAsync($"https://login.{_credentials.Environment}/oauth/token", new FormUrlEncodedContent(form));
+            response.EnsureSuccessStatusCode();
+            _tokenInfo = await response.Content.ReadFromJsonAsync<AuthTokenInfo>();
+            if (_tokenInfo != null) {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _tokenInfo.AccessToken);
+                if (_tokenInfo.ExpiresIn.HasValue) {
+                    _tokenExpiresAt = DateTime.Now.AddSeconds((int)_tokenInfo.ExpiresIn);
+                }
+            }
+        }
+
+    }
+}

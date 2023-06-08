@@ -1,0 +1,22 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace {TargetNamespace} {
+    public class ApiException : Exception {
+        public ErrorBody? ErrorBody { get; private set; }
+        public ErrorInfo? ErrorInfo { get; private set; }
+        public ApiException(string message) : base(message) { }
+        internal ApiException(string message, ErrorInfo? errorInfo) : base(message) {
+            ErrorInfo = errorInfo;
+        }
+        internal ApiException(string message, ErrorBody? errorBody) : base(message) {
+            ErrorBody = errorBody;
+        }
+        internal ApiException(string message, ScimError? scimError) : base(message) {
+            
+            // TODO: Handle ScimError
+        }
+
+    }
+}

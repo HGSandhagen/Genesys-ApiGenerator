@@ -1,0 +1,244 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+namespace {TargetNamespace} {
+    using System.Reflection;
+    using System.Text.Json;
+    using System.Text.Json.Serialization;
+    using System.Xml.Linq;
+
+    public static class EnumExtensions {
+        public static TAttribute GetAttribute<TAttribute>(this Enum value)
+            where TAttribute : System.Attribute {
+            var type = value.GetType();
+            var name = Enum.GetName(type, value);
+            if(name == null) {
+                throw new JsonException();
+            }
+            var attr = type.GetField(name)? // I prefer to get attributes this way
+                .GetCustomAttribute<TAttribute>();
+            if (attr == null) {
+                throw new JsonException();
+            }
+            return attr;
+        }
+    }
+    [System.AttributeUsage(System.AttributeTargets.Field, AllowMultiple = false, Inherited = false)]
+    public class JsonEnumNameAttribute : System.Attribute {
+        public string JsonName { get; private set; }
+        public JsonEnumNameAttribute(string jsonName) {
+            JsonName = jsonName;
+        }
+    }
+    public class DictionaryTKeyEnumTValueConverter : JsonConverterFactory {
+        public override bool CanConvert(Type typeToConvert) {
+            if (!typeToConvert.IsGenericType) {
+                return false;
+            }
+
+            if (typeToConvert.GetGenericTypeDefinition() != typeof(Dictionary<,>)) {
+                return false;
+            }
+
+            return typeToConvert.GetGenericArguments()[0].IsEnum;
+        }
+
+        public override JsonConverter CreateConverter(Type type, JsonSerializerOptions options) {
+            Type keyType = type.GetGenericArguments()[0];
+            Type valueType = type.GetGenericArguments()[1];
+
+            var converter = Activator.CreateInstance(
+                typeof(DictionaryEnumConverterInner<,>).MakeGenericType(
+                    new Type[] { keyType, valueType }),
+                BindingFlags.Instance | BindingFlags.Public,
+                binder: null,
+                args: new object[] { options },
+                culture: null);
+            if(converter == null) {
+                throw new Exception("Error creating converter for type " + type.ToString());
+            }
+            return (JsonConverter)converter;
+        }
+
+        private class DictionaryEnumConverterInner<TKey, TValue> :
+            JsonConverter<Dictionary<TKey, TValue>> where TKey : struct, Enum {
+            private readonly JsonConverter<TValue> _valueConverter;
+            private readonly Type _keyType;
+            private readonly Type _valueType;
+
+            public DictionaryEnumConverterInner(JsonSerializerOptions options) {
+                // For performance, use the existing converter.
+                _valueConverter = (JsonConverter<TValue>)options
+                    .GetConverter(typeof(TValue));
+
+                // Cache the key and value types.
+                _keyType = typeof(TKey);
+                _valueType = typeof(TValue);
+            }
+
+            public override Dictionary<TKey, TValue> Read(
+                ref Utf8JsonReader reader,
+                Type typeToConvert,
+                JsonSerializerOptions options) {
+                if (reader.TokenType != JsonTokenType.StartObject) {
+                    throw new JsonException();
+                }
+
+                var dictionary = new Dictionary<TKey, TValue>();
+
+                while (reader.Read()) {
+                    if (reader.TokenType == JsonTokenType.EndObject) {
+                        return dictionary;
+                    }
+
+                    // Get the key.
+                    if (reader.TokenType != JsonTokenType.PropertyName) {
+                        throw new JsonException();
+                    }
+
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                    string propertyName = reader.GetString();
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+
+                    // For performance, parse with ignoreCase:false first.
+                    if (!Enum.TryParse(propertyName, ignoreCase: false, out TKey key) &&
+                        !Enum.TryParse(propertyName, ignoreCase: true, out key)) {
+                        throw new JsonException(
+                            $"Unable to convert \"{propertyName}\" to Enum \"{_keyType}\".");
+                    }
+
+                    // Get the value.
+                    reader.Read();
+                    var value = _valueConverter.Read(ref reader, _valueType, options);
+                    if(value == null) {
+                        throw new JsonException();
+                    }
+                    // Add to dictionary.
+                    dictionary.Add(key, value);
+                }
+
+                throw new JsonException();
+            }
+
+            public override void Write(
+                Utf8JsonWriter writer,
+                Dictionary<TKey, TValue> dictionary,
+                JsonSerializerOptions options) {
+                writer.WriteStartObject();
+
+                //foreach ((TKey key, TValue value) in dictionary) {
+                foreach (var item in dictionary) {
+                    var propertyName = item.Key.ToString();
+                    writer.WritePropertyName
+                        (options.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName);
+
+                    _valueConverter.Write(writer, item.Value, options);
+                }
+
+                writer.WriteEndObject();
+            }
+        }
+
+    }
+    public class JsonEnumMemberStringEnumConverter : JsonConverterFactory {
+        // TODO: Implement JsonEnumMemberStringEnumConverter
+        public override bool CanConvert(Type typeToConvert) {
+             return typeToConvert.IsEnum;
+        }
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) {
+            //Type keyType = typeToConvert.GetGenericArguments()[0];
+            //Type valueType = typeToConvert.GetGenericArguments()[1];
+
+            var converter = Activator.CreateInstance(
+                typeof(EnumConverterInner<>).MakeGenericType(typeToConvert));
+
+            //    new Type[] { typeToConvert }),
+            //BindingFlags.Instance | BindingFlags.Public,
+            //binder: null,
+            //args: new object[] { options },
+            //culture: null);
+            if(converter == null ) {
+                throw new JsonException();
+            }
+            return (JsonConverter)converter;
+        }
+        private class EnumConverterInner<TKey> :
+            JsonConverter<TKey> where TKey : struct, Enum {
+            public override TKey Read(
+                ref Utf8JsonReader reader,
+                Type typeToConvert,
+                JsonSerializerOptions options) {
+                if (reader.TokenType != JsonTokenType.String) {
+                    throw new JsonException();
+                }
+
+                //TKey dictionary = new TKey();
+
+                //while (reader.Read()) {
+                //                    if (reader.TokenType == JsonTokenType.EndObject) {
+                //                        return dictionary;
+                //                    }
+
+                // Get the key.
+                //                    if (reader.TokenType != JsonTokenType.PropertyName) {
+                //                        throw new JsonException();
+                //                    }
+                
+                string? item = reader.GetString();
+                TKey value;
+                if(Enum.TryParse<TKey>(item, out value)) {
+                    return value;
+                }
+                foreach (var name in typeToConvert.GetEnumNames()) {
+                    var field = typeToConvert.GetField(name);
+                    if (field?.GetCustomAttribute<JsonEnumNameAttribute>()?.JsonName == item) {
+                        return (TKey)Enum.Parse(typeToConvert, name);
+                    }
+                }
+                //// For performance, parse with ignoreCase:false first.
+                //if (!Enum.TryParse(item, ignoreCase: false, out TKey key) &&
+                //        !Enum.TryParse(item, ignoreCase: true, out key)) {
+                //        throw new JsonException(
+                //            $"Unable to convert \"{item}\" to Enum \"{typeToConvert}\".");
+                //    }
+                //    // Get the value.
+                //    //reader.Read();
+                //    return key;
+                //}
+                throw new JsonException();
+
+            }
+            public override void Write(
+                Utf8JsonWriter writer,
+                TKey item,
+                JsonSerializerOptions options) {
+                //writer.WriteStartObject();
+
+                //foreach ((TKey key, TValue value) in dictionary) {
+                //foreach (var item in dictionary) {
+                    var propertyName = item.ToString();
+                    var attr = item.GetAttribute<JsonEnumNameAttribute>();
+                if (attr != null) {
+                    writer.WriteStringValue(attr.JsonName);
+                }
+                else {
+                    writer.WriteStringValue(propertyName);
+                }
+                        //(options.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName);
+
+                    //_valueConverter.Write(writer, item.Value, options);
+                //}
+
+                //writer.WriteEndObject();
+            }
+        }
+    }
+}

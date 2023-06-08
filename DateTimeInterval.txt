@@ -1,0 +1,15 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace {TargetNamespace} {
+    public class DateTimeInterval {
+        public DateTimeOffset From { get; set; }
+        public DateTimeOffset To { get; set; }
+        public override string ToString() {
+            return $"{From.ToString("O")}/{To.ToString("O")}";
+        }
+    }
+}
