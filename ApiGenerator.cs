@@ -1,6 +1,9 @@
-﻿using System;
+﻿using CommandLine.Text;
+using Microsoft.AspNetCore.Http;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -15,12 +18,15 @@ namespace ApiGenerator {
         private string _targetFolder;
         private ApiDefaults _apiDefaults = new();
         private List<SwaggerApi> _swaggerApis = new();
-        List<SwaggerDefinition> _swaggerDefinitions = new List<SwaggerDefinition>();
+        List<SwaggerDefinition> _swaggerDefinitions = new ();
+        Dictionary<string,NotificationSwaggerDefinition> _swaggernotification = new ();
         private string? _swagger;
         private string? _host;
         private ApiInfo? _info;
         private List<DefinitionModel> _models = new();
+        private List<DefinitionModel> _notificationModels = new();
         private Dictionary<string, List<ApiOperation>> _apis = new();
+
         public ApiGenerator(string targetNamespace, string targetFolder) {
             _namespace = targetNamespace;
             if (!Directory.Exists(targetFolder)) {
@@ -30,9 +36,15 @@ namespace ApiGenerator {
         }
         public ApiDefaults ApiDefaults { get => _apiDefaults; }
         public void WriteDefinitionsJson() {
-            //File.WriteAllText("models.json", JsonSerializer.Serialize(_models, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
-            File.WriteAllText("apis.json", JsonSerializer.Serialize(_apis, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
-
+            if (_models.Any()) {
+                File.WriteAllText("models.json", JsonSerializer.Serialize(_models, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
+            }
+            if (_apis.Any()) {
+                File.WriteAllText("apis.json", JsonSerializer.Serialize(_apis, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
+            }
+            if (_notificationModels.Any()) {
+                File.WriteAllText("notifications.json", JsonSerializer.Serialize(_notificationModels, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
+            }
         }
 
         public void ParseSwagger(string swaggerfile) {
@@ -66,7 +78,7 @@ namespace ApiGenerator {
                                         }
                                     }
                                     else {
-                                        Console.WriteLine("Path must not be an array");
+                                        throw new Exception("Path must not be an array");
                                     }
                                 }
                             }
@@ -77,12 +89,12 @@ namespace ApiGenerator {
                         case "definitions":
                             if (o.Value is JsonObject) {
                                 foreach (var p in o.Value.AsObject()) {
-                                    //Console.WriteLine("Definition: " + p.Key);
+                                    
                                     if (p.Value != null && p.Value is JsonObject) {
                                         _swaggerDefinitions.Add(new SwaggerDefinition(p.Key, (JsonObject)p.Value));
                                     }
                                     else {
-                                        Console.WriteLine("Definition value must be an object");
+                                        throw new Exception("Definition value must be an object");
                                     }
                                 }
                             }
@@ -193,7 +205,480 @@ namespace ApiGenerator {
                 }
             }
         }
+        public void ParseNotificationSwagger(string notificationFile) {
+            if (!File.Exists(notificationFile)) {
+                throw new ArgumentException("Could not find file \"" + notificationFile + "\"");
+            }
+            JsonNode? document;
+            try {
+                document = JsonNode.Parse(File.ReadAllText(notificationFile));
+            }
+            catch (Exception ex) {
+                throw new Exception($"Error parsing file \"{notificationFile}\"", ex);
+            }
+            if (document == null) {
+                throw new Exception($"Error parsing file \"{notificationFile}\"");
+            }
+            JsonNode root = document.Root;
+            if (root is JsonObject) {
+                var entities = ((JsonObject)root)["entities"];
+                if (entities is JsonArray) {
+                    foreach (var item in entities.AsArray()) {
+                        if (item is JsonObject) {
+                            ParseNotification((JsonObject)item);
+                        }
+                    }
+                }
+            }
+            else {
+                throw new Exception("Root must be a JsonObject");
+            }
+        }
 
+        private void ParseNotification(JsonObject o) {
+            string? name = null;
+            JsonObject? schema = null; 
+            foreach (var item in o.AsObject()) {
+                switch (item.Key) {
+                    case "id":
+                        name = item.Value?.ToString();
+                        break;
+                    case "schema":
+                        schema = item.Value as JsonObject;
+                        break;
+                }
+            }
+            if(string.IsNullOrEmpty(name) || schema == null) {
+                throw new Exception("Error reading notification");
+            }
+            _swaggernotification.Add(name, ParseNotificationSwaggerDefinition(schema));
+        }
+        NotificationSwaggerDefinition ParseNotificationSwaggerDefinition(JsonObject o) {
+            string? id = null;
+            string? name = null;
+            string? type = null;
+            List<NotificationProperty> properties = new();
+            string[]? required = null;
+            string? description = null;
+            foreach (var item in o) {
+                switch (item.Key) {
+                    case "id":
+                        id = item.Value?.ToString();
+                        break;
+                    case "type":
+                        type = item.Value?.ToString();
+                        break;
+                    case "properties":
+                        if (item.Value != null) {
+                            foreach (var prop in item.Value.AsObject()) {
+                                if (prop.Value != null) {
+                                    properties.Add(ParseNotificationProperty(prop.Key, prop.Value.AsObject()));
+                                }
+                            }
+                        }
+                        break;
+                    case "required":
+                        if (item.Value is JsonArray) {
+                            var list = new List<string>();
+                            foreach (var prop in item.Value.AsArray()) {
+                                if (prop != null) {
+                                    list.Add(prop.ToString());
+                                }
+                            }
+                            required = list.ToArray();
+                        }
+                        break;
+                    case "description":
+                        description = item.Value?.ToString();
+                        break;
+                    default:
+                        Console.WriteLine(item.Key);
+                        break;
+                }
+            }
+            if (!string.IsNullOrEmpty(id)) {
+                string[] n = id.Replace("urn:jsonschema:", "").Split(':');
+                name = string.Join("", n.Select(p => p.Substring(0, 1).ToUpper() + p.Substring(1)));
+            }
+            else {
+                throw new Exception("No id found for notification.");
+            }
+            //Console.WriteLine("Parse " + id);
+            return new NotificationSwaggerDefinition(id, type, properties.ToArray(), required, description);
+
+        }
+        NotificationProperty ParseNotificationProperty(string? name_, JsonObject value) {
+            string? name = name_;
+            string? description = null;
+            bool? readOnly = null;
+            bool? uniqueItems = null;
+            string? example = null;
+            string? genesysEntityType = null;
+            string[]? genesysSearchFields = null;
+            double? minimum = null;
+            double? maximum = null;
+            int? minItems = null; 
+            int? maxItems = null;
+            int? minLength = null;
+            int? maxLength = null;
+            int? position = null;
+            NotificationProperty[]? properties = null;
+            NotificationBase b = ParseNotificationBase(value);
+            foreach (var item in value) {
+                switch (item.Key) {
+                    case "name":
+                        if (item.Value != null) {
+                            name = item.Value?.ToString();
+                        }
+                        else {
+                            throw new Exception("Name must not be null");
+                        }
+                        break;
+                    case "description":
+                        description = item.Value?.ToString();
+                        break;
+
+                    case "readOnly":
+                        readOnly = item.Value?.GetValue<bool>();
+                        break;
+                    case "uniqueItems":
+                        uniqueItems = item.Value?.GetValue<bool>();
+                        break;
+                    case "example":
+                        example = item.Value?.ToString();
+                        break;
+                    case "x-genesys-entity-type":
+                        genesysEntityType = item.Value?.ToString();
+                        break;
+                    case "x-genesys-search-fields":
+                        if (item.Value is JsonArray) {
+                            var list = new List<string>();
+                            foreach (var prop in item.Value.AsArray()) {
+                                if (prop != null) {
+                                    list.Add(prop.ToString());
+                                }
+                            }
+                            genesysSearchFields = list.ToArray();
+                        }
+                        break;
+                    case "minimum":
+                        minimum = item.Value?.GetValue<double>();
+                        break;
+                    case "maximum":
+                        maximum = item.Value?.GetValue<double>();
+                        break;
+                    case "maxItems":
+                        maxItems = item.Value?.GetValue<int>();
+                        break;
+                    case "minItems":
+                        minItems = item.Value?.GetValue<int>();
+                        break;
+                    case "minLength":
+                        minLength = item.Value?.GetValue<int>();
+                        break;
+                    case "maxLength":
+                        maxLength = item.Value?.GetValue<int>();
+                        break;
+                    case "position":
+                        position = item.Value?.GetValue<int>();
+                        break;
+                    case "properties":
+                        List<NotificationProperty> l = new();
+                        if(item.Value is JsonObject) {
+                            foreach (var p in item.Value.AsObject()) {
+                                if (p.Value is JsonObject) {
+                                    l.Add(ParseNotificationProperty(p.Key, p.Value.AsObject()));
+                                }
+                            }
+                            properties = l.ToArray();
+                        }
+                        break;
+                    // Handled in SwaggerBase
+                    case "id":
+                    case "$ref":
+                    case "type":
+                    case "format":
+                    case "enum":
+                    case "items":
+                    case "additionalProperties":
+                        break;
+                    default:
+                        break;
+                        //throw new Exception($"Unknown key {item.Key} in property");
+
+                }
+            }
+            if (string.IsNullOrEmpty(name)) {
+                throw new Exception("Name must not be null");
+            }
+            var n = new NotificationProperty(name, description, properties, readOnly, uniqueItems, example, genesysEntityType, genesysSearchFields, minimum, maximum, minItems, maxItems, minLength, maxLength, position, b);
+            if (!string.IsNullOrEmpty(n.Id) && n.Type == "object") {
+                var t = n.GetTypeInfo(n.Id);
+                //if (_notificationModels.FirstOrDefault(p => p.Id == n.Id) != null) {
+                //    Console.WriteLine(n.Id);
+                //}
+                DefinitionModel? model = null;
+                 if (n.Properties != null) {
+                    model = new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null));
+                }
+                else {
+                    model = new DefinitionModel(new NotificationSwaggerDefinition(n.Id, "System.Object", null));
+
+                }
+                var check = _notificationModels.FirstOrDefault(p => p.Id == n.Id);
+                if(check != null) { 
+                    if(check.Properties.Count < model.Properties.Count) {
+                        check.Properties = model.Properties;
+                    }
+                }
+                else {
+                    _notificationModels.Add(model);
+                }
+
+            }
+            //if (!string.IsNullOrEmpty(n.Id) && n.Properties != null) {
+            //    var t = n.GetTypeInfo(n.Id);
+
+            //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null)));
+            //}
+            return n;
+
+            //return new NotificationProperty(name, description, readOnly, uniqueItems, example, genesysEntityType, genesysSearchFields, minimum, maximum, minItems, maxItems, minLength, maxLength, position, b);
+        }
+
+        NotificationBase ParseNotificationBase(JsonObject o) {
+            string? id = null;
+            string? @ref = null;
+            string? type = null;
+            string? format = null;
+            NotificationArray? items = null;
+            string[]? enumValues = null;
+            NotificationAdditionalProperties? additionalProperties = null;
+            string? @default = null;
+            foreach (var item in o) {
+                switch (item.Key) {
+                    case "id":
+                        id = item.Value?.ToString();
+                        break;
+                    case "$ref":
+                        @ref = item.Value?.ToString();
+                        break;
+                    case "type":
+                        type = item.Value?.ToString();
+                        break;
+                    case "enum":
+                        if (item.Value is JsonArray) {
+                            var list = new List<string>();
+                            foreach (var prop in item.Value.AsArray()) {
+                                if (prop != null) {
+                                    list.Add(prop.ToString());
+                                }
+                            }
+                            enumValues = list.ToArray();
+                        }
+                        break;
+                    case "format":
+                        format = item.Value?.ToString();
+                        break;
+                    case "items":
+                        if (item.Value is JsonObject)
+                            items = ParseNotificationArray((JsonObject)item.Value);
+                        break;
+                    case "additionalProperties":
+                        if (item.Value is JsonObject) {
+                            additionalProperties = ParseNotificationAdditionalProperties((JsonObject)item.Value);
+                        }
+                        break;
+                    case "default":
+                        @default = item.Value?.ToString();
+                        break;
+                }
+            }
+            if (type == "array" && items == null) {
+                throw new Exception("Array must have Items");
+            }
+
+
+            return new NotificationBase(id, @ref, type, format, items, enumValues, additionalProperties, @default);
+        }
+        NotificationAdditionalProperties ParseNotificationAdditionalProperties(JsonObject o) {
+            bool? uniqueItems = null;
+            NotificationProperty[]? properties = null;
+            NotificationBase b = ParseNotificationBase(o);
+            foreach (var item in o) {
+                switch (item.Key) {
+                    case "uniqueItems":
+                        uniqueItems = item.Value?.GetValue<bool>();
+                        break;
+                    case "properties":
+                        if (item.Value != null) {
+                            List<NotificationProperty> l = new();
+                            foreach (var prop in item.Value.AsObject()) {
+                                if (prop.Value != null) {
+                                    l.Add(ParseNotificationProperty(prop.Key, prop.Value.AsObject()));
+                                }
+                            }
+                            properties = l.ToArray();
+                        }
+                        break;
+                    // Handled in NotificationBase
+                    case "id":
+                    case "$ref":
+                    case "type":
+                    case "format":
+                    case "items":
+                    case "enum":
+                        break;
+                    default:
+                        Console.WriteLine($"case \"{item.Key}\":\r\n\tbreak;");
+                        break;
+                }
+            }
+            var n = new NotificationAdditionalProperties(uniqueItems, properties, b);
+            if (!string.IsNullOrEmpty(n.Id) && n.Type == "object") {
+                var t = n.GetTypeInfo(n.Id);
+                //if (_notificationModels.FirstOrDefault(p => p.Id == n.Id) != null) {
+                //    Console.WriteLine(n.Id);
+                //}
+                DefinitionModel? model = null;
+                if (n.Properties != null) {
+                    model = new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null));
+                }
+                else {
+                    model = new DefinitionModel(new NotificationSwaggerDefinition(n.Id, "System.Object", null));
+
+                }
+                var check = _notificationModels.FirstOrDefault(p => p.Id == n.Id);
+                if (check != null) {
+                    if (check.Properties.Count < model.Properties.Count) {
+                        check.Properties = model.Properties;
+                    }
+                }
+                else {
+                    _notificationModels.Add(model);
+                }
+
+                //if (_notificationModels.FirstOrDefault(p => p.Id == n.Id) != null) {
+                //    Console.WriteLine(n.Id);
+                //}
+                //if (n.Properties != null) {
+                //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null)));
+                //}
+                //else {
+                //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, "System.Object", null)));
+
+                //}
+            }
+            //if (!string.IsNullOrEmpty(n.Id) && n.Properties != null) {
+            //    var t = n.GetTypeInfo(n.Id);
+
+            //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null)));
+            //}
+
+            return n;
+        }
+
+        NotificationArray ParseNotificationArray(JsonObject o) {
+            string? description = null;
+            NotificationProperty[]? properties = null;
+            NotificationBase b = ParseNotificationBase(o);
+            foreach (var item in o) {
+                switch (item.Key) {
+                    case "description":
+                        description = item.Value?.ToString();
+                        break;
+                    case "properties":
+                        if (item.Value != null) {
+                            List<NotificationProperty> l = new();
+                            foreach (var prop in item.Value.AsObject()) {
+                                if (prop.Value != null) {
+                                    l.Add(ParseNotificationProperty(prop.Key, prop.Value.AsObject()));
+                                }
+                            }
+                            properties = l.ToArray();
+                        }
+                        break;
+                    // Handled in NotificationBase
+                    case "id":
+                    case "$ref":
+                    case "type":
+                    case "enum":
+                    case "format":
+                    case "additionalProperties":
+                    case "default":
+                        break;
+                    default:
+                        throw new Exception($"Unknown key {item.Key} in item array");
+                }
+            }
+            var n = new NotificationArray(description, properties, b);
+            if (!string.IsNullOrEmpty(n.Id) && n.Type == "object") {
+                var t = n.GetTypeInfo(n.Id);
+                if (_notificationModels.FirstOrDefault(p => p.Id == n.Id) != null) {
+                    Console.WriteLine(n.Id);
+                }
+
+                DefinitionModel? model = null;
+                if (n.Properties != null) {
+                    model = new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null));
+                }
+                else {
+                    model = new DefinitionModel(new NotificationSwaggerDefinition(n.Id, "System.Object", null));
+
+                }
+                var check = _notificationModels.FirstOrDefault(p => p.Id == n.Id);
+                if (check != null) {
+                    if (check.Properties.Count < model.Properties.Count) {
+                        check.Properties = model.Properties;
+                    }
+                }
+                else {
+                    _notificationModels.Add(model);
+                }
+
+                //if (_notificationModels.FirstOrDefault(p => p.Id == n.Id) != null) {
+                //    Console.WriteLine(n.Id);
+                //}
+                //if (n.Properties != null) {
+                //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null)));
+                //}
+                //else {
+                //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, "System.Object", null)));
+
+                //}
+            }
+            //if (!string.IsNullOrEmpty(n.Id) && n.Properties != null) {
+            //    var t = n.GetTypeInfo(n.Id);
+
+            //    _notificationModels.Add(new DefinitionModel(new NotificationSwaggerDefinition(n.Id, t.TypeName, n.Properties, null, null)));
+            //}
+            return n;
+
+        }
+
+        public void CreateNotificationDefinitions() {
+            foreach (var item in _swaggernotification) {
+                DefinitionModel def = new DefinitionModel(item.Value);
+                var check = _notificationModels.FirstOrDefault(p => p.Name == def.Name);
+                if (check != null) {
+                    //var result = check.Properties.ExceptBy(def.Properties.Select(x => x.Name), x => x.Name);
+                    //if (result.Count() > 0) {
+                    //    Console.WriteLine();
+                    //}
+                }
+                else {
+                    _notificationModels.Add(def);
+                }
+            }
+            foreach (var item in _notificationModels) {
+                foreach (var prop in item.Properties) {
+                    var checkAlias = _notificationModels.FirstOrDefault(p => p.Name == prop.TypeName && p.Alias != null); 
+                    if(checkAlias != null && checkAlias.Alias != null) {
+                        prop.TypeName = checkAlias.Alias;
+                    }
+                }
+            }
+        }
         public void CreateApis() {
 
             foreach (var item in _swaggerApis) {
@@ -219,30 +704,78 @@ namespace ApiGenerator {
 
         public void WriteDataDefinitions() {
             int i = 0;
-            string modelFolder = Path.Combine(_targetFolder, "Model");
+            string modelFolder = Path.Combine(_targetFolder, "Models");
             if (!Directory.Exists(modelFolder)) {
                 Directory.CreateDirectory(modelFolder);
             }
             else {
                 //ClearDirectory(modelFolder);
             }
+
+            Console.Write("Writing models ");
             foreach (var def in _models) {
                 if (string.IsNullOrEmpty(def.Name)) {
                     throw new Exception("Name of data object must not be null");
                 }
-                Console.WriteLine(++i + ": " + def.Name);
+                if (++i % 100 == 0) {
+                    Console.Write(".");
+                }
                 using (var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"))) {
                     writer.WriteLine("using System;");
                     writer.WriteLine("using System.Collections.Generic;");
                     writer.WriteLine("using System.Runtime.Serialization;");
                     writer.WriteLine("using System.Text.Json.Serialization;");
                     writer.WriteLine();
-                    writer.WriteLine($"namespace {_namespace} {{");
+                    writer.WriteLine($"namespace {_namespace}.Models {{");
                     WriteModelDefinition(def, writer, 1);
                     writer.WriteLine("}");
                 }
 
             }
+            Console.WriteLine();
+            Console.WriteLine(i + " models written.");
+        }
+        public void WriteNotificationDefinitions() {
+            int i = 0;
+            string modelFolder = Path.Combine(_targetFolder, "Models");
+            if (!Directory.Exists(modelFolder)) {
+                Directory.CreateDirectory(modelFolder);
+            }
+            else {
+                //ClearDirectory(modelFolder);
+            }
+            var alias = _notificationModels.Where(p => p.Alias != null).ToArray();
+            Console.Write("Writing notification models ");
+            foreach (var def in _notificationModels.Where(p => p.Alias == null)) {
+                if (string.IsNullOrEmpty(def.Name)) {
+                    throw new Exception("Name of data object must not be null");
+                }
+                if (++i % 100 == 0) {
+                    Console.Write(".");
+                }
+                using (var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"))) {
+                    writer.WriteLine("using System;");
+                    writer.WriteLine("using System.Collections.Generic;");
+                    writer.WriteLine("using System.Runtime.Serialization;");
+                    writer.WriteLine("using System.Text.Json.Serialization;");
+                    writer.WriteLine();
+                    //def.Properties.Select(p => p.TypeName).ToList().ForEach(p => {
+                    //    var a = alias.FirstOrDefault(a => a.Name == p);
+                    //    if(a != null) {
+                    //        writer.WriteLine($"using {p} = {a.Alias};");
+                    //    }
+                    //});
+                    //if (def.IsAlias) {
+                    //    writer.WriteLine($"using {def.Name} = {def.T}
+                    //}
+                    writer.WriteLine($"namespace {_namespace}.Models {{");
+                    WriteModelDefinition(def, writer, 1);
+                    writer.WriteLine("}");
+                }
+
+            }
+            Console.WriteLine();
+            Console.WriteLine(i + " notification models written.");
         }
         private ApiOperation CreateApiOperation(SwaggerOperation op) {
             var operation = new ApiOperation();
@@ -329,14 +862,18 @@ namespace ApiGenerator {
                 Directory.CreateDirectory(apiFolder);
             }
             int i = 0;
+            Console.WriteLine("Writing apis ");
             StreamWriter? writer = null;
             //var groups = _apis.Select(p => p.Name).Distinct().OrderBy(p => p);
             foreach (var group in _apis) {
-                Console.WriteLine(++i + ": " + group.Key);
+                if (++i % 10 == 0) {
+                    Console.Write(".");
+                }
 
                 //if (!path.Name.StartsWith(group)) {
                 string groupName = CreateName(group.Key);
                 writer = new StreamWriter(Path.Combine(apiFolder, groupName + "Api.cs"));
+                writer.WriteLine($"using {_namespace}.Models;");
                 writer.WriteLine("using Microsoft.AspNetCore.Http.Extensions;");
                 writer.WriteLine("using Microsoft.Extensions.Logging;");
                 writer.WriteLine("using System;");
@@ -373,6 +910,8 @@ namespace ApiGenerator {
                 writer.WriteLine("}");
                 writer.Close();
             }
+            Console.WriteLine();
+            Console.WriteLine(i + " apis written.");
         }
         private void WriteOperation(ApiOperation operation, StreamWriter writer, int indent) {
             string operationName = $"{operation.Id.Substring(0, 1).ToUpper()}{operation.Id.Substring(1)}";
@@ -449,14 +988,19 @@ namespace ApiGenerator {
 
             }
             else {
-                writer.WriteIndent(indent + 1).Write($"public async Task<{response}> ");
+                if (response == "Action") { // Workaround for ambigous System.Action
+                    writer.WriteIndent(indent + 1).Write($"public async Task<Models.{response}> ");
+                }
+                else {
+                    writer.WriteIndent(indent + 1).Write($"public async Task<{response}> ");
+                }
             }
             writer.Write($"{operationName} (");
             if (operation.Parameters?.Any() == true) {
                 writer.Write(string.Join(", ", operation.Parameters.OrderByDescending(p => p.IsRequired).Select(p => {
                     var typeName = p.TypeName;
                     if (p.EnumValues != null) {
-                        typeName = operationName + typeName;
+                        typeName = $"{operationName}{typeName}";
                     }
                     if (p.IsCollection) {
                         typeName = $"IEnumerable<{typeName}>";
@@ -601,6 +1145,9 @@ namespace ApiGenerator {
                         else {
                             writer.WriteIndent(indent + 2).WriteLine($"if (((int)response.StatusCode) == {responseType}) {{");
                             if (response != "void") {
+                                if(response == "Action") {// Workaround for ambigous System.Action
+                                    response = "Models." + response;
+                                }
                                 writer.WriteIndent(indent + 3).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
                                 if (response != "int" && item.EnumModel == null) {
                                     writer.WriteIndent(indent + 3).WriteLine("if(result == null) {");
@@ -617,6 +1164,9 @@ namespace ApiGenerator {
                     }
                     else if (item.ResponseCode == "default") {
                         if (response != "void") {
+                            if (response == "Action") { // Workaround for ambigous System.Action
+                                response = "Models." + response;
+                            }
                             writer.WriteIndent(indent + 2).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
                             if (response != "int") {
                                 writer.WriteIndent(indent + 2).WriteLine("if(result == null) {");
@@ -876,6 +1426,9 @@ namespace ApiGenerator {
             }
             if (name == "GetType") {
                 name += "_";
+            }
+            if (name.EndsWith("$")) {
+                name = name.Substring(0,name.Length-1);
             }
             return name;
         }

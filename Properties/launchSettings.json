@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ApiGenerator": {
+      "commandName": "Project",
+      "commandLineArgs": "notification -i .\\notificationSchema.json -t D:\\Projects\\GenesysCloud\\ApiGenerator\\GenesysCloud.Client.V2"
+    }
+  }
+}
