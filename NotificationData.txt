@@ -1,0 +1,21 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace {TargetNamespace} {
+    public class NotificationData<T> {
+        [JsonPropertyName("topicName")]
+        public string? TopicName { get; set; }
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+        [JsonPropertyName("eventBody")]
+        public T? EventBody { get; set; }
+        [JsonPropertyName("userId")]
+        public string? UserId { get; set; }
+        [JsonPropertyName("metadata")]
+        public NotificationMetadata? Metadata { get; set; }
+    }
+}

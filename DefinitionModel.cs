@@ -10,6 +10,7 @@ namespace ApiGenerator {
         public DefinitionModel(SwaggerDefinition item) {
             Name = item.Name;
             Description = item.Description;
+            IsNotification = false;
             EnumDefinitions = new List<EnumModel>();
             Properties = new List<DefinitionPropertyModel>();
             foreach (var p in item.Properties) {
@@ -44,6 +45,8 @@ namespace ApiGenerator {
             Id = item.Id;
             Name = item.Name;
             Description = item.Description;
+            IsNotification = true;
+            TopicParameters = item.TopicParameters;
             EnumDefinitions = new List<EnumModel>();
             Properties = new List<DefinitionPropertyModel>();
             if (item.Properties.Any() == false) {
@@ -80,7 +83,9 @@ namespace ApiGenerator {
         public string? Id { get; set; }
         public string Name { get; set; }
         public string? Description { get; set; }
+        public bool IsNotification { get; set; }
         public string? Alias { get; set; }
+        public string[]? TopicParameters { get; set; }
         public List<DefinitionPropertyModel> Properties { get; set; } = new List<DefinitionPropertyModel>();
         public List<EnumModel> EnumDefinitions { get; set; } = new List<EnumModel>();
 

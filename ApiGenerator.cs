@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -17,9 +18,10 @@ namespace ApiGenerator {
         private string _namespace;
         private string _targetFolder;
         private ApiDefaults _apiDefaults = new();
-        private List<SwaggerApi> _swaggerApis = new();
-        List<SwaggerDefinition> _swaggerDefinitions = new ();
-        Dictionary<string,NotificationSwaggerDefinition> _swaggernotification = new ();
+        private readonly List<SwaggerApi> _swaggerApis = new();
+        private readonly List<SwaggerDefinition> _swaggerDefinitions = new ();
+        private readonly Dictionary<string,NotificationSwaggerDefinition> _swaggernotification = new ();
+        private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = new();
         private string? _swagger;
         private string? _host;
         private ApiInfo? _info;
@@ -209,49 +211,77 @@ namespace ApiGenerator {
             if (!File.Exists(notificationFile)) {
                 throw new ArgumentException("Could not find file \"" + notificationFile + "\"");
             }
-            JsonNode? document;
+            AvailableTopicEntityListing? topicListing;
             try {
-                document = JsonNode.Parse(File.ReadAllText(notificationFile));
+                topicListing = JsonSerializer.Deserialize<AvailableTopicEntityListing>(File.ReadAllText(notificationFile));
             }
             catch (Exception ex) {
                 throw new Exception($"Error parsing file \"{notificationFile}\"", ex);
             }
-            if (document == null) {
+            if (topicListing == null) {
                 throw new Exception($"Error parsing file \"{notificationFile}\"");
             }
-            JsonNode root = document.Root;
-            if (root is JsonObject) {
-                var entities = ((JsonObject)root)["entities"];
-                if (entities is JsonArray) {
-                    foreach (var item in entities.AsArray()) {
-                        if (item is JsonObject) {
-                            ParseNotification((JsonObject)item);
-                        }
-                    }
+            if(topicListing.Entities?.Any() == true) {
+                foreach (var item in topicListing.Entities.Where(p => p.Transports != null && (p.Transports.Contains(AvailableTopic.TransportsConstant.Websocket) || p.Transports.Contains(AvailableTopic.TransportsConstant.All)))) {
+                    ParseNotification(item);
                 }
             }
+            
             else {
-                throw new Exception("Root must be a JsonObject");
+                throw new Exception($"No entities found in {notificationFile}.");
             }
         }
 
-        private void ParseNotification(JsonObject o) {
-            string? name = null;
-            JsonObject? schema = null; 
-            foreach (var item in o.AsObject()) {
-                switch (item.Key) {
-                    case "id":
-                        name = item.Value?.ToString();
-                        break;
-                    case "schema":
-                        schema = item.Value as JsonObject;
-                        break;
-                }
-            }
-            if(string.IsNullOrEmpty(name) || schema == null) {
+        private void ParseNotification(AvailableTopic o) {
+            //string? name = null;
+            //JsonObject? schema = null;
+            //string? description = null;
+            //string? visibility = null;
+            //foreach (var item in o.AsObject()) {
+            //    switch (item.Key) {
+            //        case "id":
+            //            name = item.Value?.ToString();
+            //            break;
+            //        case "schema":
+            //            schema = item.Value as JsonObject;
+            //            break;
+            //        case "description":
+            //            description = item.Value?.ToString();
+            //            break;
+            //        case "visibility":
+            //            visibility = item.Value?.ToString();
+            //            break;
+            //        default:
+            //            break;
+            //    }
+            //}
+            if(string.IsNullOrEmpty(o.Id) || o.Schema == null || o.Transports == null) {
                 throw new Exception("Error reading notification");
             }
-            _swaggernotification.Add(name, ParseNotificationSwaggerDefinition(schema));
+            if (o.Schema != null) {
+                //foreach(var x in ((JsonElement)o.Schema).EnumerateObject()) {
+                //    Console.WriteLine();
+                //}
+                var nd = ParseNotificationSwaggerDefinition((JsonObject)o.Schema);
+                var match = Regex.Matches(o.Id, @"\.([a-z0-9]*)\.(\{id\})");
+                string[]? topicParameters = null;
+                if (match.Any()) {
+                    var list = match.Select(p => {
+                        var x = p.Groups[1].Value;
+                        if (x.EndsWith("s")) {
+                            x = x.Substring(0, x.Length - 1);
+                        }
+                        return x.Substring(0, 1).ToUpper() + x.Substring(1) + "Id";
+                    });
+
+                    // Console.WriteLine($"{o.Id} : {string.Join(" | ", list)}");
+
+                    nd.TopicParameters = list.ToArray();
+                    topicParameters = nd.TopicParameters;
+                }
+                _topicTypeMap.Add(o.Id, new TopicTypeInfo(nd.Name, topicParameters, o.TopicParameters?.ToArray(), o.Transports, o.Description));
+                _swaggernotification.Add(o.Id, nd);
+            }
         }
         NotificationSwaggerDefinition ParseNotificationSwaggerDefinition(JsonObject o) {
             string? id = null;
@@ -776,6 +806,28 @@ namespace ApiGenerator {
             }
             Console.WriteLine();
             Console.WriteLine(i + " notification models written.");
+            using (var writer = new StreamWriter(Path.Combine(_targetFolder, "NotificationChannelTopicMap.cs"))) {
+                writer.WriteLine($"using {_namespace}.Models;");
+                writer.WriteLine();
+                writer.WriteLine($"namespace {_namespace} {{");
+                writer.WriteIndent(1).WriteLine("public partial class NotificationChannel {");
+                writer.WriteIndent(2).WriteLine("static private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = new() {");
+                //            //{ \"v2.users.{id}.presence\", new EventTypeInfo(typeof(GenesysCloud.Client.V2.EventUserPresence), new string[] {\"UserId\" }) },\r\n            //{ \"v2.users.{id}.conversationsummary\", new EventTypeInfo(typeof(EventUserConversationSummary), new string[]{\"UserId\"}) },\r\n            //{ \"v2.users.{id}.routingStatus\", new EventTypeInfo(typeof(EventUserRoutingStatus), new string[]{\"UserId\"}) },\r\n            //{ \"v2.users.{id}.conversations.calls\", new EventTypeInfo(typeof(EventTopicCallConversation), new string[]{\"UserId\"}) }\r\n        };\r\n    }\r\n}");
+                foreach (var item in _topicTypeMap) {
+                    writer.WriteIndent(3).Write($"{{ \"{item.Key}\", new TopicTypeInfo(typeof({item.Value.TypeName}),  ");
+                    if (item.Value.TopicParameters?.Any() == true) {
+                        writer.WriteLine($"new string[] {{ {string.Join(", ", item.Value.TopicParameters.Select(p => $"\"{p}\""))} }}) }},");
+                    }
+                    else {
+                        writer.WriteLine("new string[0]) },");
+                    }
+                }
+                writer.WriteIndent(2).WriteLine("};");
+                writer.WriteIndent(1).WriteLine("}");
+                writer.WriteLine("}");
+
+
+            }
         }
         private ApiOperation CreateApiOperation(SwaggerOperation op) {
             var operation = new ApiOperation();
@@ -1356,7 +1408,8 @@ namespace ApiGenerator {
                 }
                 writer.WriteIndent(indent + 1).WriteLine("/// </summary>");
             }
-            writer.WriteIndent(indent + 2).WriteLine($"public class {model.Name} {{");
+            var notificationbase = model.IsNotification ? ": NotificationEvent " : "";
+            writer.WriteIndent(indent + 2).WriteLine($"public class {model.Name} {notificationbase}{{");
             if (model.Properties != null) {
                 //foreach (var item in EnumDefinitions) {
                 foreach (var item in model.EnumDefinitions) {
@@ -1367,6 +1420,12 @@ namespace ApiGenerator {
                 writer.WriteLine("#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.");
                 foreach (var item in model.Properties) {
                     WriteProperty(item, writer, indent + 1);
+                }
+                if (model.TopicParameters != null) {
+                    writer.WriteIndent(indent + 1).WriteLine("// Topic parameter");
+                    foreach (var item in model.TopicParameters) {
+                        writer.WriteIndent(indent + 1).WriteLine($"public string Notification{item} {{ get; set; }}");
+                    }
                 }
                 writer.WriteLine("#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.\r\n");
             }

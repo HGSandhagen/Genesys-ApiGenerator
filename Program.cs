@@ -5,7 +5,6 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Extensions;
-using ApiGenerator;
 
 string swaggerfile = "publicapi-v2-latest.json";
 string targetNamespace = "GenesysCloud.Client.V2";
@@ -41,6 +40,8 @@ int RunSwagger(SwaggerOptions opts) {
     File.WriteAllText(Path.Combine(opts.TargetFolder, "DateTimeInterval.cs"), File.ReadAllText("DateTimeInterval.txt").Replace("{TargetNamespace}", targetNamespace));
     File.WriteAllText(Path.Combine(opts.TargetFolder, "GenesysCloudCredentials.cs"), File.ReadAllText("GenesysCloudCredentials.txt").Replace("{TargetNamespace}", targetNamespace));
     File.WriteAllText(Path.Combine(opts.TargetFolder, "JsonEnumMemberStringEnumConverter.cs"), File.ReadAllText("JsonEnumMemberStringEnumConverter.txt").Replace("{TargetNamespace}", targetNamespace));
+
+
     if (!File.Exists(Path.Combine(opts.TargetFolder, $"{targetNamespace}.csproj"))) {
         File.WriteAllText(Path.Combine(opts.TargetFolder, $"{targetNamespace}.csproj"), File.ReadAllText("Project.txt"));
     }
@@ -130,6 +131,13 @@ int RunNotification(NotificationOptions opts) {
     apiGenerator.CreateNotificationDefinitions();
     apiGenerator.WriteDefinitionsJson();
     apiGenerator.WriteNotificationDefinitions();
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationChannel.cs"), File.ReadAllText("NotificationChannel.txt").Replace("{TargetNamespace}", targetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationData.cs"), File.ReadAllText("NotificationData.txt").Replace("{TargetNamespace}", targetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationEvent.cs"), File.ReadAllText("NotificationEvent.txt").Replace("{TargetNamespace}", targetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationMetadata.cs"), File.ReadAllText("NotificationMetadata.txt").Replace("{TargetNamespace}", targetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "Notifications.cs"), File.ReadAllText("Notifications.txt").Replace("{TargetNamespace}", targetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "TopicTypeInfo.cs"), File.ReadAllText("TopicTypeInfo.txt").Replace("{TargetNamespace}", targetNamespace));
+
     return 0;
 }
 [Verb("readnotification", HelpText = "Read notification definitions")]
@@ -140,13 +148,13 @@ class ReadNotificationOptions {
     [Option("clientSecret", Required = true, HelpText = "The client secret for the request")]
     public string? ClientSecret { get; set; }
 
-    [Option("environment", Required = true,  HelpText = "The evvironment to get the informantion from (Example: mypurecloud.de).")]
+    [Option("environment", Required = true,  HelpText = "The evironment to get the informantion from (Example: mypurecloud.de).")]
     public string? Environment { get; set; }
 }
 
 [Verb("notification", HelpText = "Proceed notification definitions")]
 class NotificationOptions {
-    [Option('i', "inputFile", Required = true, HelpText = "The notification definitions from NotificationReader.")]
+    [Option('i', "inputFile", Required = true, HelpText = "The notification definitions read with 'readnotifications'.")]
     public string? NotificationFile { get; set; }
 
     // Omitting long name, defaults to name of property, ie "--verbose"
@@ -192,63 +200,4 @@ class AuthTokenInfo {
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
-}
-
-public class AvailableTopicEntityListing {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-    [JsonPropertyName("entities")]
-    public IEnumerable<AvailableTopic>? Entities { get; set; }
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-
-}
-public class AvailableTopic {
-    [JsonConverter(typeof(JsonEnumMemberStringEnumConverter))]
-    public enum VisibilityConstant {
-        [JsonEnumName("Public")]
-        Public,
-        [JsonEnumName("Preview")]
-        Preview,
-    }
-    [JsonConverter(typeof(JsonEnumMemberStringEnumConverter))]
-    public enum TransportsConstant {
-        [JsonEnumName("All")]
-        All,
-        [JsonEnumName("Websocket")]
-        Websocket,
-        [JsonEnumName("EventBridge")]
-        EventBridge,
-        [JsonEnumName("ProcessAutomation")]
-        ProcessAutomation,
-    }
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-    [JsonPropertyName("description")]
-    public string? Description { get; set; }
-    [JsonPropertyName("id")]
-    public string? Id { get; set; }
-    //[JsonPropertyName("permissionDetails")]
-    //public IEnumerable<PermissionDetails>? PermissionDetails { get; set; }
-    [JsonPropertyName("requiresPermissions")]
-    public IEnumerable<string>? RequiresPermissions { get; set; }
-    [JsonPropertyName("requiresDivisionPermissions")]
-    public bool? RequiresDivisionPermissions { get; set; }
-    [JsonPropertyName("requiresAnyValidator")]
-    public bool? RequiresAnyValidator { get; set; }
-    [JsonPropertyName("enforced")]
-    public bool? Enforced { get; set; }
-    [JsonPropertyName("visibility")]
-    public VisibilityConstant? Visibility { get; set; }
-    [JsonPropertyName("schema")]
-    public object? Schema { get; set; }
-    [JsonPropertyName("requiresCurrentUser")]
-    public bool? RequiresCurrentUser { get; set; }
-    [JsonPropertyName("requiresCurrentUserOrPermission")]
-    public bool? RequiresCurrentUserOrPermission { get; set; }
-    [JsonPropertyName("transports")]
-    public IEnumerable<TransportsConstant>? Transports { get; set; }
-    [JsonPropertyName("publicApiTemplateUriPaths")]
-    public IEnumerable<string>? PublicApiTemplateUriPaths { get; set; }
-    [JsonPropertyName("topicParameters")]
-    public IEnumerable<string>? TopicParameters { get; set; }
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-
 }

@@ -89,5 +89,6 @@ namespace ApiGenerator {
         public NotificationProperty[] Properties { get; set; }
         public string[]? Required { get; set; }
         public bool IsAlias { get; set; }
+        public string[]? TopicParameters { get; set; }
     }
 }
