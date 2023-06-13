@@ -751,6 +751,7 @@ namespace ApiGenerator {
                     Console.Write(".");
                 }
                 using (var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"))) {
+                    writer.WriteLine($"using {_namespace};");
                     writer.WriteLine("using System;");
                     writer.WriteLine("using System.Collections.Generic;");
                     writer.WriteLine("using System.Runtime.Serialization;");
@@ -784,7 +785,8 @@ namespace ApiGenerator {
                     Console.Write(".");
                 }
                 using (var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"))) {
-                    writer.WriteLine("using System;");
+                    writer.WriteLine($"using {_namespace};");
+                   writer.WriteLine("using System;");
                     writer.WriteLine("using System.Collections.Generic;");
                     writer.WriteLine("using System.Runtime.Serialization;");
                     writer.WriteLine("using System.Text.Json.Serialization;");

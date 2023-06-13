@@ -1,4 +1,4 @@
-﻿using GenesysCloud.Client.V2.Models;
+﻿using {TargetNamespace}.Models;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
