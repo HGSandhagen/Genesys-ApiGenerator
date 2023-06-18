@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -934,6 +935,7 @@ namespace ApiGenerator {
                 writer.WriteLine("using System.Collections.Generic;");
                 writer.WriteLine("using System.Linq;");
                 writer.WriteLine("using System.Net.Http;");
+                writer.WriteLine("using System.Net.Http.Headers;");
                 writer.WriteLine("using System.Net.Http.Json;");
                 writer.WriteLine("using System.Text.Json.Serialization;");
                 writer.WriteLine("using System.Threading.Tasks;");
@@ -1080,12 +1082,13 @@ namespace ApiGenerator {
             else {
                 writer.WriteIndent(indent + 2).WriteLine($"var requestPath = \"{operation.Path}\";");
             }
-
+            // TODO: Check query parameter
             if (operation.Parameters != null) {
-                writer.WriteIndent(indent + 2).WriteLine("// Query params");
-                writer.WriteIndent(indent + 2).WriteLine("var q_ = new QueryBuilder();");
                 var queryParams = operation.Parameters?.Where(p => p.Position == ApiOperationParameter.ParameterKind.Query);
-                if (queryParams != null) {
+                if (queryParams?.Any() == true) {
+                    writer.WriteIndent(indent + 2).WriteLine("// Query params");
+                    writer.WriteIndent(indent + 2).WriteLine("var q_ = new QueryBuilder();");
+
                     foreach (var item in queryParams) {
                         if (item.TypeName == "int" || item.TypeName == "bool" || item.TypeName == "float" || item.TypeName == "double" || item.TypeName == "long" || item.TypeName == "DateTimeInterval") {
                             if (item.IsRequired) {
@@ -1152,7 +1155,7 @@ namespace ApiGenerator {
                     }
                 }
             }
-            var otherParams = operation.Parameters?.Where(p => p.Position != ApiOperationParameter.ParameterKind.Path && p.Position != ApiOperationParameter.ParameterKind.Query);
+            var otherParams = operation.Parameters?.Where(p => p.Position != ApiOperationParameter.ParameterKind.Path && p.Position != ApiOperationParameter.ParameterKind.Query && p.Position != ApiOperationParameter.ParameterKind.Body);
             if (otherParams != null) {
                 foreach (var item in otherParams) {
                     writer.WriteIndent(indent + 2).WriteLine($"// {item.Position}: {item.TypeName} {item.Name}");
@@ -1161,12 +1164,28 @@ namespace ApiGenerator {
             writer.WriteLine();
             writer.WriteIndent(indent + 2).WriteLine("// make the HTTP request");
             writer.WriteIndent(indent + 2).WriteLine("var uri = new UriBuilder(httpClient.BaseAddress);");
+            var bodyParam = operation.Parameters?.FirstOrDefault(p => p.Position == ApiOperationParameter.ParameterKind.Body);
             writer.WriteIndent(indent + 2).WriteLine("uri.Path = requestPath;");
             if (operation.Parameters?.Any(p => p.Position == ApiOperationParameter.ParameterKind.Query) == true) {
                 writer.WriteIndent(indent + 2).WriteLine("uri.Query = q_.ToString();");
             }
-
+ 
             writer.WriteIndent(indent + 2).WriteLine($"using HttpRequestMessage request = new(HttpMethod.{operation.Method}, uri.Uri);");
+            if (bodyParam != null) {
+                writer.WriteIndent(indent + 2).WriteLine($"using HttpContent content = JsonContent.Create({bodyParam.Name}, new MediaTypeWithQualityHeaderValue(\"application/json\"));");
+                writer.WriteIndent(indent + 2).WriteLine("request.Content = content;");
+            }
+            List<string> consumes = new();
+            if(_apiDefaults.Consumes?.Any() == true) {
+                consumes.AddRange(_apiDefaults.Consumes);
+            }
+            if (operation.Consumes?.Any() == true) {
+                consumes.AddRange(operation.Consumes);
+            }
+            foreach (var item in consumes.Distinct()) {
+                writer.WriteIndent(indent + 2).WriteLine($"request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue(\"{item}\"));");
+            }
+            
             writer.WriteIndent(indent + 2).WriteLine("using var response = await httpClient.SendAsync(request);");
 
             //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("if (response.IsSuccessStatusCode) {");
@@ -1204,11 +1223,11 @@ namespace ApiGenerator {
                                 }
                                 writer.WriteIndent(indent + 3).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
                                 if (response != "int" && item.EnumModel == null) {
-                                    writer.WriteIndent(indent + 3).WriteLine("if(result == null) {");
-                                    writer.WriteIndent(indent + 4).WriteLine($"throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
-                                    writer.WriteIndent(indent + 3).WriteLine("}");
+                                    writer.WriteIndent(indent + 3).WriteLine("return result != null ? result : throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
                                 }
-                                writer.WriteIndent(indent + 3).WriteLine("return result;");
+                                else {
+                                    writer.WriteIndent(indent + 3).WriteLine("return result;");
+                                }
                             }
                             else {
                                 writer.WriteIndent(indent + 3).WriteLine("return;");
