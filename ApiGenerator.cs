@@ -16,9 +16,9 @@ using System.Xml.Linq;
 
 namespace ApiGenerator {
     internal class ApiGenerator {
-        private string _namespace;
-        private string _targetFolder;
-        private ApiDefaults _apiDefaults = new();
+        private readonly string _namespace;
+        private readonly string _targetFolder;
+        private readonly ApiDefaults _apiDefaults = new();
         private readonly List<SwaggerApi> _swaggerApis = new();
         private readonly List<SwaggerDefinition> _swaggerDefinitions = new ();
         private readonly Dictionary<string,NotificationSwaggerDefinition> _swaggernotification = new ();
@@ -26,9 +26,9 @@ namespace ApiGenerator {
         private string? _swagger;
         private string? _host;
         private ApiInfo? _info;
-        private List<DefinitionModel> _models = new();
-        private List<DefinitionModel> _notificationModels = new();
-        private Dictionary<string, List<ApiOperation>> _apis = new();
+        private readonly List<DefinitionModel> _models = new();
+        private readonly List<DefinitionModel> _notificationModels = new();
+        private readonly Dictionary<string, List<ApiOperation>> _apis = new();
 
         public ApiGenerator(string targetNamespace, string targetFolder) {
             _namespace = targetNamespace;
@@ -93,8 +93,8 @@ namespace ApiGenerator {
                             if (o.Value is JsonObject) {
                                 foreach (var p in o.Value.AsObject()) {
                                     
-                                    if (p.Value != null && p.Value is JsonObject) {
-                                        _swaggerDefinitions.Add(new SwaggerDefinition(p.Key, (JsonObject)p.Value));
+                                    if (p.Value != null && p.Value is JsonObject object2) {
+                                        _swaggerDefinitions.Add(new SwaggerDefinition(p.Key, object2));
                                     }
                                     else {
                                         throw new Exception("Definition value must be an object");
@@ -110,8 +110,8 @@ namespace ApiGenerator {
                             _swagger = o.Value?.ToString();
                             break;
                         case "info":
-                            if (o.Value is JsonObject) {
-                                _info = new ApiInfo((JsonObject)o.Value);
+                            if (o.Value is JsonObject object1) {
+                                _info = new ApiInfo(object1);
                             }
                             break;
                         case "host":
@@ -180,8 +180,8 @@ namespace ApiGenerator {
                             if (o.Value is JsonObject) {
                                 List<SecurityScheme> l = new();
                                 foreach (var item in o.Value.AsObject()) {
-                                    if (item.Value is JsonObject) {
-                                        l.Add(ParseSecurityObject(item.Key, (JsonObject)item.Value));
+                                    if (item.Value is JsonObject object2) {
+                                        l.Add(ParseSecurityObject(item.Key, object2));
                                     }
                                 }
                                 _apiDefaults.SecuritySchemes = l.ToArray();
@@ -194,8 +194,8 @@ namespace ApiGenerator {
                             // TODO: default responses
                             break;
                         case "externalDocs":
-                            if (o.Value is JsonObject) {
-                                _apiDefaults.ExternalDocs = ParseExternalDocs((JsonObject)o.Value);
+                            if (o.Value is JsonObject @object) {
+                                _apiDefaults.ExternalDocs = ParseExternalDocs(@object);
                             }
                             else {
                                 throw new Exception("Tags must be a JsonArray");
@@ -272,7 +272,7 @@ namespace ApiGenerator {
                         if (x.EndsWith("s")) {
                             x = x.Substring(0, x.Length - 1);
                         }
-                        return x.Substring(0, 1).ToUpper() + x.Substring(1) + "Id";
+                        return string.Concat(x.Substring(0, 1).ToUpper(), x.AsSpan(1), "Id");
                     });
 
                     // Console.WriteLine($"{o.Id} : {string.Join(" | ", list)}");
@@ -329,7 +329,7 @@ namespace ApiGenerator {
             }
             if (!string.IsNullOrEmpty(id)) {
                 string[] n = id.Replace("urn:jsonschema:", "").Split(':');
-                name = string.Join("", n.Select(p => p.Substring(0, 1).ToUpper() + p.Substring(1)));
+                name = string.Join("", n.Select(p => string.Concat(p.Substring(0, 1).ToUpper(), p.AsSpan(1))));
             }
             else {
                 throw new Exception("No id found for notification.");
@@ -512,12 +512,12 @@ namespace ApiGenerator {
                         format = item.Value?.ToString();
                         break;
                     case "items":
-                        if (item.Value is JsonObject)
-                            items = ParseNotificationArray((JsonObject)item.Value);
+                        if (item.Value is JsonObject @object)
+                            items = ParseNotificationArray(@object);
                         break;
                     case "additionalProperties":
-                        if (item.Value is JsonObject) {
-                            additionalProperties = ParseNotificationAdditionalProperties((JsonObject)item.Value);
+                        if (item.Value is JsonObject object1) {
+                            additionalProperties = ParseNotificationAdditionalProperties(object1);
                         }
                         break;
                     case "default":
@@ -689,7 +689,7 @@ namespace ApiGenerator {
 
         public void CreateNotificationDefinitions() {
             foreach (var item in _swaggernotification) {
-                DefinitionModel def = new DefinitionModel(item.Value);
+                DefinitionModel def = new(item.Value);
                 var check = _notificationModels.FirstOrDefault(p => p.Name == def.Name);
                 if (check != null) {
                     //var result = check.Properties.ExceptBy(def.Properties.Select(x => x.Name), x => x.Name);
@@ -728,7 +728,7 @@ namespace ApiGenerator {
         }
         public void CreateModels() {
             foreach (var item in _swaggerDefinitions) {
-                DefinitionModel def = new DefinitionModel(item);
+                DefinitionModel def = new(item);
                 _models.Add(def);
             }
         }
@@ -751,17 +751,16 @@ namespace ApiGenerator {
                 if (++i % 100 == 0) {
                     Console.Write(".");
                 }
-                using (var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"))) {
-                    writer.WriteLine($"using {_namespace};");
-                    writer.WriteLine("using System;");
-                    writer.WriteLine("using System.Collections.Generic;");
-                    writer.WriteLine("using System.Runtime.Serialization;");
-                    writer.WriteLine("using System.Text.Json.Serialization;");
-                    writer.WriteLine();
-                    writer.WriteLine($"namespace {_namespace}.Models {{");
-                    WriteModelDefinition(def, writer, 1);
-                    writer.WriteLine("}");
-                }
+                using var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"));
+                writer.WriteLine($"using {_namespace};");
+                writer.WriteLine("using System;");
+                writer.WriteLine("using System.Collections.Generic;");
+                writer.WriteLine("using System.Runtime.Serialization;");
+                writer.WriteLine("using System.Text.Json.Serialization;");
+                writer.WriteLine();
+                writer.WriteLine($"namespace {_namespace}.Models {{");
+                WriteModelDefinition(def, writer, 1);
+                writer.WriteLine("}");
 
             }
             Console.WriteLine();
@@ -785,26 +784,25 @@ namespace ApiGenerator {
                 if (++i % 100 == 0) {
                     Console.Write(".");
                 }
-                using (var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"))) {
-                    writer.WriteLine($"using {_namespace};");
-                   writer.WriteLine("using System;");
-                    writer.WriteLine("using System.Collections.Generic;");
-                    writer.WriteLine("using System.Runtime.Serialization;");
-                    writer.WriteLine("using System.Text.Json.Serialization;");
-                    writer.WriteLine();
-                    //def.Properties.Select(p => p.TypeName).ToList().ForEach(p => {
-                    //    var a = alias.FirstOrDefault(a => a.Name == p);
-                    //    if(a != null) {
-                    //        writer.WriteLine($"using {p} = {a.Alias};");
-                    //    }
-                    //});
-                    //if (def.IsAlias) {
-                    //    writer.WriteLine($"using {def.Name} = {def.T}
-                    //}
-                    writer.WriteLine($"namespace {_namespace}.Models {{");
-                    WriteModelDefinition(def, writer, 1);
-                    writer.WriteLine("}");
-                }
+                using var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"));
+                writer.WriteLine($"using {_namespace};");
+                writer.WriteLine("using System;");
+                writer.WriteLine("using System.Collections.Generic;");
+                writer.WriteLine("using System.Runtime.Serialization;");
+                writer.WriteLine("using System.Text.Json.Serialization;");
+                writer.WriteLine();
+                //def.Properties.Select(p => p.TypeName).ToList().ForEach(p => {
+                //    var a = alias.FirstOrDefault(a => a.Name == p);
+                //    if(a != null) {
+                //        writer.WriteLine($"using {p} = {a.Alias};");
+                //    }
+                //});
+                //if (def.IsAlias) {
+                //    writer.WriteLine($"using {def.Name} = {def.T}
+                //}
+                writer.WriteLine($"namespace {_namespace}.Models {{");
+                WriteModelDefinition(def, writer, 1);
+                writer.WriteLine("}");
 
             }
             Console.WriteLine();
@@ -832,7 +830,7 @@ namespace ApiGenerator {
 
             }
         }
-        private ApiOperation CreateApiOperation(SwaggerOperation op) {
+        private static ApiOperation CreateApiOperation(SwaggerOperation op) {
             var operation = new ApiOperation();
             operation.Id = op.OperationId;
             operation.IsDeprecated = op.Deprecated;
@@ -854,8 +852,8 @@ namespace ApiGenerator {
             }
             return operation;
         }
-        private ApiOperationParameter CreateApiParameter(SwaggerParameter p) {
-            ApiOperationParameter param = new ApiOperationParameter();
+        private static ApiOperationParameter CreateApiParameter(SwaggerParameter p) {
+            ApiOperationParameter param = new();
             param.Name = p.Name;
             if (p.Ref != null) {
                 param.TypeName = p.Ref.Replace("#/definitions/", "");
@@ -866,7 +864,7 @@ namespace ApiGenerator {
                 param.IsCollection = t.IsCollection;
                 if (t.EnumModel != null) {
                     // Workaround for wildcard enums
-                    if (!t.EnumModel.EnumValues.Any(p => p.Contains("*"))) {
+                    if (!t.EnumModel.EnumValues.Any(p => p.Contains('*'))) {
                         param.EnumValues = t.EnumModel.EnumValues.ToArray();
                     }
                     else {
@@ -896,8 +894,8 @@ namespace ApiGenerator {
             }
             return param;
         }
-        private ApiOperationResponse CreateApiResponse(string operationName, SwaggerResponse r) {
-            ApiOperationResponse response = new ApiOperationResponse();
+        private static ApiOperationResponse CreateApiResponse(string operationName, SwaggerResponse r) {
+            ApiOperationResponse response = new();
             if (r.Content != null) {
                 TypeInfo t = r.Content.GetTypeInfo(operationName);
                 response.TypeName = t.TypeName;
@@ -918,7 +916,6 @@ namespace ApiGenerator {
             }
             int i = 0;
             Console.WriteLine("Writing apis ");
-            StreamWriter? writer = null;
             //var groups = _apis.Select(p => p.Name).Distinct().OrderBy(p => p);
             foreach (var group in _apis) {
                 if (++i % 10 == 0) {
@@ -927,7 +924,7 @@ namespace ApiGenerator {
 
                 //if (!path.Name.StartsWith(group)) {
                 string groupName = CreateName(group.Key);
-                writer = new StreamWriter(Path.Combine(apiFolder, groupName + "Api.cs"));
+                StreamWriter? writer = new(Path.Combine(apiFolder, groupName + "Api.cs"));
                 writer.WriteLine($"using {_namespace}.Models;");
                 writer.WriteLine("using Microsoft.AspNetCore.Http.Extensions;");
                 writer.WriteLine("using Microsoft.Extensions.Logging;");
@@ -1028,9 +1025,7 @@ namespace ApiGenerator {
             string response = "void";
             if (operation.Responses != null) {
                 var res = operation.Responses.FirstOrDefault(p => p.ResponseCode == "default");
-                if (res == null) {
-                    res = operation.Responses.OrderBy(p => p.ResponseCode).First();
-                }
+                res ??= operation.Responses.OrderBy(p => p.ResponseCode).First();
                 if (res.TypeName != null) {
                     response = res.TypeName;
                 }
@@ -1103,7 +1098,7 @@ namespace ApiGenerator {
                         else if (item.EnumValues != null) {
                             if (item.IsRequired) {
                                 if (item.IsCollection) {
-                                    writer.WriteIndent(indent + 2).WriteLine($"if({item.PName} != null && {item.PName}.Count() > 0) {{");
+                                    writer.WriteIndent(indent + 2).WriteLine($"if({item.PName}?.Any() == true) {{");
                                     writer.WriteIndent(indent + 3).WriteLine($"q_.Add(\"{item.Name}\", string.Join(\",\",{item.PName}.Select(p => p.GetAttribute<JsonEnumNameAttribute>().JsonName)));");
                                     writer.WriteIndent(indent + 2).WriteLine("}");
                                 }
@@ -1113,7 +1108,7 @@ namespace ApiGenerator {
                             }
                             else {
                                 if (item.IsCollection) {
-                                    writer.WriteIndent(indent + 2).WriteLine($"if({item.PName} != null && {item.PName}.Count() > 0) {{");
+                                    writer.WriteIndent(indent + 2).WriteLine($"if({item.PName}?.Any() == true) {{");
                                     writer.WriteIndent(indent + 3).WriteLine($"q_.Add(\"{item.Name}\", string.Join(\",\",{item.PName}.Select(p => p.GetAttribute<JsonEnumNameAttribute>().JsonName)));");
                                     writer.WriteIndent(indent + 2).WriteLine("}");
                                 }
@@ -1143,7 +1138,7 @@ namespace ApiGenerator {
                         //    sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("}");
                         //}
                         else if (item.IsCollection) {
-                            writer.WriteIndent(indent + 2).WriteLine($"if({item.PName} != null && {item.PName}.Count() > 0) {{");
+                            writer.WriteIndent(indent + 2).WriteLine($"if({item.PName}?.Any() == true) {{");
                             writer.WriteIndent(indent + 3).WriteLine($"q_.Add(\"{item.Name}\", string.Join(\",\",{item.PName}));");
                             writer.WriteIndent(indent + 2).WriteLine("}");
                         }
@@ -1164,12 +1159,13 @@ namespace ApiGenerator {
             writer.WriteLine();
             writer.WriteIndent(indent + 2).WriteLine("// make the HTTP request");
             writer.WriteIndent(indent + 2).WriteLine("var uri = new UriBuilder(httpClient.BaseAddress);");
-            var bodyParam = operation.Parameters?.FirstOrDefault(p => p.Position == ApiOperationParameter.ParameterKind.Body);
             writer.WriteIndent(indent + 2).WriteLine("uri.Path = requestPath;");
+
             if (operation.Parameters?.Any(p => p.Position == ApiOperationParameter.ParameterKind.Query) == true) {
                 writer.WriteIndent(indent + 2).WriteLine("uri.Query = q_.ToString();");
             }
- 
+            var bodyParam = operation.Parameters?.FirstOrDefault(p => p.Position == ApiOperationParameter.ParameterKind.Body);
+
             writer.WriteIndent(indent + 2).WriteLine($"using HttpRequestMessage request = new(HttpMethod.{operation.Method}, uri.Uri);");
             if (bodyParam != null) {
                 writer.WriteIndent(indent + 2).WriteLine($"using HttpContent content = JsonContent.Create({bodyParam.Name}, new MediaTypeWithQualityHeaderValue(\"application/json\"));");
@@ -1223,7 +1219,7 @@ namespace ApiGenerator {
                                 }
                                 writer.WriteIndent(indent + 3).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
                                 if (response != "int" && item.EnumModel == null) {
-                                    writer.WriteIndent(indent + 3).WriteLine("return result != null ? result : throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
+                                    writer.WriteIndent(indent + 3).WriteLine("return result ?? throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
                                 }
                                 else {
                                     writer.WriteIndent(indent + 3).WriteLine("return result;");
@@ -1280,7 +1276,7 @@ namespace ApiGenerator {
         }
 
 
-        private SecurityScheme ParseSecurityObject(string key, JsonObject value) {
+        private static SecurityScheme ParseSecurityObject(string key, JsonObject value) {
             string? schemeType = null;
             string? description = null;
             string? parameterName = null;
@@ -1355,8 +1351,8 @@ namespace ApiGenerator {
                     throw new Exception("Unknown security scheme type " + schemeType);
             }
         }
-        private IEnumerable<Scope> ParseScopes(JsonObject scopes) {
-            List<Scope> scopesList = new List<Scope>();
+        private static IEnumerable<Scope> ParseScopes(JsonObject scopes) {
+            List<Scope> scopesList = new();
             foreach (var item in scopes.AsObject()) {
                 if (item.Value == null) {
                     throw new Exception("Description of scope must not be empty");
@@ -1365,7 +1361,7 @@ namespace ApiGenerator {
             }
             return scopesList;
         }
-        private TagDescription ParseTag(JsonObject tag) {
+        private static TagDescription ParseTag(JsonObject tag) {
             string? name = null;
             string? description = null;
             Documentation? externalDocs = null;
@@ -1397,7 +1393,7 @@ namespace ApiGenerator {
                 ExternalDocumentation = externalDocs
             };
         }
-        private Documentation ParseExternalDocs(JsonObject externalDocs) {
+        private static Documentation ParseExternalDocs(JsonObject externalDocs) {
             string? url = null;
             string? description = null;
             foreach (var item in externalDocs.AsObject()) {
@@ -1420,7 +1416,7 @@ namespace ApiGenerator {
             };
         }
 
-        void WriteModelDefinition(DefinitionModel model, StreamWriter writer, int indent) {
+        static void WriteModelDefinition(DefinitionModel model, StreamWriter writer, int indent) {
 
             if (model.Description != null) {
                 writer.WriteIndent(indent + 1).WriteLine("/// <summary>");
@@ -1453,7 +1449,8 @@ namespace ApiGenerator {
             writer.WriteIndent(indent + 1).WriteLine("}");
             //return sb.ToString();
         }
-        void WriteEnumDefinition(string name, string[] values, StreamWriter writer, int indent) {
+
+        static void WriteEnumDefinition(string name, string[] values, StreamWriter writer, int indent) {
             //StringBuilder sb = new();
             writer.WriteIndent(indent + 1).WriteLine("[JsonConverter(typeof(JsonEnumMemberStringEnumConverter))]");
             writer.WriteIndent(indent + 1).WriteLine($"public enum {name} {{");
@@ -1466,7 +1463,7 @@ namespace ApiGenerator {
             //return sb.ToString();
         }
 
-        void WriteProperty(DefinitionPropertyModel param, StreamWriter writer, int indent) {
+        static void WriteProperty(DefinitionPropertyModel param, StreamWriter writer, int indent) {
             //StringBuilder sb = new();
             if (param.Description != null) {
                 writer.WriteIndent(indent + 1).WriteLine("/// <summary>");
@@ -1478,7 +1475,13 @@ namespace ApiGenerator {
             }
             writer.WriteIndent(indent + 1).WriteLine($"[JsonPropertyName(\"{param.JsonName}\")]");
             var notRequired = param.IsRequired ? "" : "?";
-            if (param.IsCollection) {
+            if (param.IsCollection && param.IsDictionary) {
+                writer.WriteIndent(indent + 1).WriteLine($"public Dictionary<string, IEnumerable<{param.TypeName}>>{notRequired} {param.Name} {{ get; set; }}");
+            }
+            else if (param.IsDictionary) {
+                writer.WriteIndent(indent + 1).WriteLine($"public Dictionary<string, {param.TypeName}>{notRequired} {param.Name} {{ get; set; }}");
+            }
+            else if (param.IsCollection) {
                 writer.WriteIndent(indent + 1).WriteLine($"public IEnumerable<{param.TypeName}>{notRequired} {param.Name} {{ get; set; }}");
             }
             else {
@@ -1518,10 +1521,10 @@ namespace ApiGenerator {
     public static class WriterExtensions {
         public static StreamWriter WriteIndent(this StreamWriter writer, int value) {
             if (writer == null) {
-                throw new ArgumentNullException("Writer must not be null");
+                throw new ArgumentException("Writer must not be null", nameof(writer));
             }
             if (value < 0) {
-                throw new ArgumentOutOfRangeException("value");
+                throw new ArgumentOutOfRangeException(nameof(value));
             }
             writer.Write(string.Join("\t", Enumerable.Repeat("", value)));
             return writer;

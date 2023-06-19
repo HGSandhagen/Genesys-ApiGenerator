@@ -122,7 +122,9 @@ namespace ApiGenerator {
                         }
                         else if (AdditionalProperties.Type == "array") {
                             if (AdditionalProperties.Items != null) {
-                                return AdditionalProperties.Items.GetTypeInfo(propName, isCollection = true);
+                                var t = AdditionalProperties.Items.GetTypeInfo(propName, isCollection = true);
+                                t.IsDictionary = true;
+                                return t;
                             }
                             else {
                                 throw new Exception("array missing items");

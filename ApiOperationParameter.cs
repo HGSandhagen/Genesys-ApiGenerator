@@ -22,14 +22,14 @@
         public object Default { get; set; }
         public IEnumerable<string> EnumValues { get; set; }
         public bool IsMultiCollection { get; set; }
-        private string FormatParameterName(string name) {
+        private static string FormatParameterName(string name) {
             string pName = name.Replace("-", "_");
             if (name.Contains('.')) {
                 string[] s = name.Split('.');
                 pName = s[0] + s[1].Substring(0, 1).ToUpper() + s[1].Substring(1);
             }
             if (pName == "override") {
-                pName = pName + "_";
+                pName += "_";
             }
             return pName;
         }
