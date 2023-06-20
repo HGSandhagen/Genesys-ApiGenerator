@@ -56,7 +56,7 @@ namespace ApiGenerator {
         public SwaggerAdditionalProperties? AdditionalProperties { get; protected set; }
         public string? Default {  get; private set; }
         public TypeInfo GetTypeInfo(string propName, bool isCollection = false) {
-            if (Ref != null) {
+            if (Ref != null && Type == null) {
                 return new TypeInfo(Ref.Replace("#/definitions/", ""), isCollection);
             }
             if (Type == null) {

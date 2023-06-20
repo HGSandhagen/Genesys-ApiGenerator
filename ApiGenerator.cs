@@ -1027,7 +1027,18 @@ namespace ApiGenerator {
                 var res = operation.Responses.FirstOrDefault(p => p.ResponseCode == "default");
                 res ??= operation.Responses.OrderBy(p => p.ResponseCode).First();
                 if (res.TypeName != null) {
-                    response = res.TypeName;
+                    if (res.IsDictionary && res.IsCollection) {
+                        response = $"Dictionary<string,IEnumerable<{res.TypeName}>>";
+                    }
+                    else if (res.IsDictionary) {
+                        response = $"Dictionary<string,{res.TypeName}>";
+                    }
+                    else if (res.IsCollection) {
+                        response = $"IEnumerable<{res.TypeName}>";
+                    }
+                    else {
+                        response = res.TypeName;
+                    }
                 }
                 else {
                     //Console.WriteLine(res.Name + " without type");
@@ -1158,7 +1169,9 @@ namespace ApiGenerator {
             }
             writer.WriteLine();
             writer.WriteIndent(indent + 2).WriteLine("// make the HTTP request");
+            writer.WriteLine("#pragma warning disable IDE0017 // Simplify object initialization");
             writer.WriteIndent(indent + 2).WriteLine("var uri = new UriBuilder(httpClient.BaseAddress);");
+            writer.WriteLine("#pragma warning restore IDE0017 // Simplify object initialization");
             writer.WriteIndent(indent + 2).WriteLine("uri.Path = requestPath;");
 
             if (operation.Parameters?.Any(p => p.Position == ApiOperationParameter.ParameterKind.Query) == true) {
