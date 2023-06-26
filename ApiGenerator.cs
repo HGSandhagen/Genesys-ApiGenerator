@@ -272,7 +272,7 @@ namespace ApiGenerator {
                         if (x.EndsWith("s")) {
                             x = x.Substring(0, x.Length - 1);
                         }
-                        return string.Concat(x.Substring(0, 1).ToUpper(), x.AsSpan(1), "Id");
+                        return string.Concat(x[..1].ToUpper(), x.AsSpan(1), "Id");
                     });
 
                     // Console.WriteLine($"{o.Id} : {string.Join(" | ", list)}");
@@ -329,7 +329,7 @@ namespace ApiGenerator {
             }
             if (!string.IsNullOrEmpty(id)) {
                 string[] n = id.Replace("urn:jsonschema:", "").Split(':');
-                name = string.Join("", n.Select(p => string.Concat(p.Substring(0, 1).ToUpper(), p.AsSpan(1))));
+                name = string.Join("", n.Select(p => string.Concat(p[..1].ToUpper(), p.AsSpan(1))));
             }
             else {
                 throw new Exception("No id found for notification.");
@@ -831,25 +831,21 @@ namespace ApiGenerator {
             }
         }
         private static ApiOperation CreateApiOperation(SwaggerOperation op) {
-            var operation = new ApiOperation();
-            operation.Id = op.OperationId;
-            operation.IsDeprecated = op.Deprecated;
-            if (op.Responses != null) {
-                operation.Responses = op.Responses.Select(p => CreateApiResponse(operation.Id, p));
-            }
-            operation.Method = op.Method;
-            operation.PurecloudMethodName = op.PurecloudMethodName;
-            operation.Produces = op.Produces;
-            operation.Consumes = op.Consumes;
-            if (op.Parameters != null) {
-                operation.Parameters = op.Parameters.Select(p => CreateApiParameter(p)).ToList();
-            }
-            operation.Path = op.Path;
-            operation.Summary = (op.Summary ?? op.Description) ?? "";
-            operation.Tags = op.Tags;
-            if (op.Security != null) {
-                operation.Permissions = op.Security.Select(p => new ApiPermisson() { PermissionType = p.Key, Permissions = p.Value });
-            }
+            var operation = new ApiOperation() {
+                Id = op.OperationId,
+                IsDeprecated = op.Deprecated,
+                Responses = op.Responses?.Select(p => CreateApiResponse(op.OperationId, p)),
+                Method = op.Method,
+            PurecloudMethodName = op.PurecloudMethodName,
+            Produces = op.Produces,
+            Consumes = op.Consumes,
+
+                Parameters = op.Parameters?.Select(p => CreateApiParameter(p)).ToList(),
+                Path = op.Path,
+                Summary = (op.Summary ?? op.Description) ?? "",
+                Tags = op.Tags,
+                Permissions = op.Security?.Select(p => new ApiPermisson() { PermissionType = p.Key, Permissions = p.Value })
+            };
             return operation;
         }
         private static ApiOperationParameter CreateApiParameter(SwaggerParameter p) {
@@ -864,8 +860,8 @@ namespace ApiGenerator {
                 param.IsCollection = t.IsCollection;
                 if (t.EnumModel != null) {
                     // Workaround for wildcard enums
-                    if (!t.EnumModel.EnumValues.Any(p => p.Contains('*'))) {
-                        param.EnumValues = t.EnumModel.EnumValues.ToArray();
+                    if (!t.EnumModel.EnumValues.Keys.Any(p => p.Contains('*'))) {
+                        param.EnumValues = t.EnumModel.EnumValues;
                     }
                     else {
                         param.TypeName = "string";// Console.WriteLine();
@@ -970,13 +966,13 @@ namespace ApiGenerator {
             string operationName = $"{operation.Id.Substring(0, 1).ToUpper()}{operation.Id.Substring(1)}";
             if (operation.Parameters?.Any() == true) {
                 foreach (var item in operation.Parameters.Where(p => p.EnumValues != null)) {
-                    WriteEnumDefinition(operationName + item.TypeName, item.EnumValues.ToArray(), writer, 2);
+                    WriteEnumDefinition(operationName + item.TypeName, item.EnumValues, writer, 2);
                     //writer.WriteIndent(indent + 1).WriteLine($"public enum {operationName + item.TypeName} {{ {string.Join(",", item.EnumValues)} }}");
                 }
             }
             var enumResponse = operation.Responses?.Where(p => p.EnumModel != null).FirstOrDefault();
             if (enumResponse != null && enumResponse.EnumModel != null) {
-                WriteEnumDefinition(enumResponse.TypeName, enumResponse.EnumModel.EnumValues.ToArray(), writer, 2);
+                WriteEnumDefinition(enumResponse.TypeName, enumResponse.EnumModel.EnumValues, writer, 2);
             }
             if (operation.Summary != null) {
                 writer.WriteIndent(indent + 1).WriteLine("/// <summary>");
@@ -1444,7 +1440,7 @@ namespace ApiGenerator {
                 //foreach (var item in EnumDefinitions) {
                 foreach (var item in model.EnumDefinitions) {
                     if (item.EnumValues != null) {
-                        WriteEnumDefinition(item.Name, item.EnumValues.ToArray(), writer, indent + 1);
+                        WriteEnumDefinition(item.Name, item.EnumValues, writer, indent + 1);
                     }
                 }
                 writer.WriteLine("#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.");
@@ -1463,13 +1459,13 @@ namespace ApiGenerator {
             //return sb.ToString();
         }
 
-        static void WriteEnumDefinition(string name, string[] values, StreamWriter writer, int indent) {
+        static void WriteEnumDefinition(string name, Dictionary<string,string> values, StreamWriter writer, int indent) {
             //StringBuilder sb = new();
             writer.WriteIndent(indent + 1).WriteLine("[JsonConverter(typeof(JsonEnumMemberStringEnumConverter))]");
             writer.WriteIndent(indent + 1).WriteLine($"public enum {name} {{");
             foreach (var item in values) {
-                writer.WriteIndent(indent + 2).WriteLine($"[JsonEnumName(\"{item}\")]");
-                writer.WriteIndent(indent + 2).WriteLine($"{CreateName(item)},");
+                writer.WriteIndent(indent + 2).WriteLine($"[JsonEnumName(\"{item.Key}\")]");
+                writer.WriteIndent(indent + 2).WriteLine($"{item.Value},");
             }
             writer.WriteIndent(indent + 1).WriteLine("}");
 
@@ -1506,7 +1502,9 @@ namespace ApiGenerator {
         internal static string CreateName(string jsonName, bool lower = false) {
             string name = Regex.Replace(jsonName, "(-[A-Za-z])", (p) => p.Value[1..].ToUpper());
             name = Regex.Replace(name, "(-[0-9])", (p) => "_" + p.Value[1..]);
-            name = Regex.Replace(name, "(_[A-Za-z])", (p) => p.Value[1..].ToUpper());
+            if (name != name.ToUpper()) {
+                name = Regex.Replace(name, "(_[A-Za-z])", (p) => p.Value[1..].ToUpper());
+            }
             name = Regex.Replace(name, "(/[A-Za-z])", (p) => p.Value[1..].ToUpper());
             name = Regex.Replace(name, "(:[A-Za-z0-9])", (p) => "_" + p.Value[1..].ToUpper());
             name = Regex.Replace(name, "(\\$[A-Za-z0-9])", (p) => p.Value[1..].ToUpper());

@@ -20,8 +20,8 @@
         public ParameterKind Position { get; set; }
         public string? Description { get; set; }
         public object Default { get; set; }
-        public IEnumerable<string> EnumValues { get; set; }
-        public bool IsMultiCollection { get; set; }
+        public Dictionary<string,string> EnumValues { get; set; }
+        //public bool IsMultiCollection { get; set; }
         private static string FormatParameterName(string name) {
             string pName = name.Replace("-", "_");
             if (name.Contains('.')) {
