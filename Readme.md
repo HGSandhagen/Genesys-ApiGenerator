@@ -44,3 +44,62 @@ This will read the notification definitions and gerenate the SDK files in the ta
 
 To generate the SDK run ```dotnet build -c Release``` from target folder.
 
+## Usage
+
+### Console app
+
+To use the api in a simple console app:
+1. Create an instance of ```GenesysCloudCredentials``` which holds the client id, client secret and the environment for the api access.
+2. Create an instance of ```ConnectionManager```.
+3. Create an instance of the API you want to use.
+4. Use the api.
+ 
+> **_Attention:_**  You should not have credential values in your code. This is for demonstartion only. In your application read it from a secure place (e.g. KeyVault).
+
+Example:
+```csharp
+GenesysCloudCredentials credentials = new GenesysCloudCredentials() {
+    ClientId = "<Enter your client id here>",
+    ClientSecret = "<Enter your client secret here>",
+    Environment = "<The environment of your organisation>" // e.g. mypurecloud.com, mypurecloud.de, etc.
+};
+ConnectionManager connectionManager = new ConnectionManager(credentials);
+
+// 
+UsersApi usersApi = new UsersApi(connectionManager);
+
+var users = await usersApi.GetUsers();
+Console.WriteLine("Users: " + users.Entities?.Count());
+
+```
+### With dependecy injection
+
+You could also use the API in your service or Web app with DI:
+
+Example:
+
+```csharp
+
+HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+// Read the credentials into configuration
+builder.Configuration.AddJsonFile("credentials.json");
+builder.Services.Configure<GenesysCloudCredentials>(builder.Configuration.GetSection("Credentials"));
+
+// Register ConnectionManager
+builder.Services.AddSingleton<ConnectionManager>();
+
+// Register the APIs you want to use
+builder.Services.AddTransient<UsersApi>();
+
+// Register your service
+builder.Services.AddHostedService<MyService>();
+
+using IHost host = builder.Build();
+```
+
+To use the API add it to the constructor of your service:
+
+```csharp
+public MyService(UserApi userApi, ...)
+```

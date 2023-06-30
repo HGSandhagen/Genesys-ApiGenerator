@@ -15,12 +15,21 @@ namespace {TargetNamespace} {
         private readonly GenesysCloudCredentials _credentials;
         private AuthTokenInfo? _tokenInfo;
         private DateTime _tokenExpiresAt = DateTime.MinValue;
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConnectionManager"/> class through dependency injection.
+        /// </summary>
+        /// <param name="genesysCloudCredentials">An instance of <see cref="IOptions<GenesysCloudCredentials>"/> which holds the credentials for the access.</param>
         public ConnectionManager(IOptions<GenesysCloudCredentials> genesysCloudCredentials) {
             _credentials = genesysCloudCredentials.Value;
             _httpClient = new HttpClient {
                 BaseAddress = new Uri($"https://api.{_credentials.Environment}")
             };
         }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConnectionManager"/> class.
+        /// </summary>
+        /// <param name="genesysCloudCredentials">An instance of <see cref="GenesysCloudCredentials"/> which holds the credentials for the access.</param>
         public ConnectionManager(GenesysCloudCredentials genesysCloudCredentials) {
             _credentials = genesysCloudCredentials;
             _httpClient = new HttpClient {
@@ -28,7 +37,7 @@ namespace {TargetNamespace} {
             };
         }
 
-        public async Task<HttpClient> GetClient() {
+        internal async Task<HttpClient> GetClient() {
             await CheckToken();
             return _httpClient;
         }

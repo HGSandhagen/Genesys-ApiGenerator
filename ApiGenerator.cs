@@ -924,6 +924,7 @@ namespace ApiGenerator {
                 writer.WriteLine($"using {_namespace}.Models;");
                 writer.WriteLine("using Microsoft.AspNetCore.Http.Extensions;");
                 writer.WriteLine("using Microsoft.Extensions.Logging;");
+                writer.WriteLine("using Microsoft.Extensions.Logging.Abstractions;");
                 writer.WriteLine("using System;");
                 writer.WriteLine("using System.Collections.Generic;");
                 writer.WriteLine("using System.Linq;");
@@ -940,19 +941,15 @@ namespace ApiGenerator {
                 writer.WriteLine("\t\t/// <summary>");
                 writer.WriteLine($"\t\t/// Initializes a new instance of the <see cref=\"{groupName}Api\"/> class.");
                 writer.WriteLine("\t\t/// </summary>");
+                writer.WriteLine("\t\t/// <param name=\"connectionManager\">An instance of <see cref=\"ConnectionManager>\"/></param>");
+                writer.WriteLine("\t\t/// <param name=\"logger\">An intance of a logger.</param>");
                 writer.WriteLine("\t\t/// <returns></returns>");
-                writer.WriteLine($"\t\tpublic {groupName}Api(ConnectionManager connectionManager, ILogger<{groupName}Api> logger) {{");
+                writer.WriteLine($"\t\tpublic {groupName}Api(ConnectionManager connectionManager, ILogger<{groupName}Api>? logger = null) {{");
                 writer.WriteLine("\t\t\t_connectionManager= connectionManager;");
-                writer.WriteLine("\t\t\t_logger = logger;");
+                writer.WriteLine($"\t\t\t_logger = logger ?? NullLogger<{groupName}Api>.Instance;");
                 writer.WriteLine("\t\t}");
 
-                //var x = group.Value.Where(p => p.Parameters != null).SelectMany(p => p.Parameters).Where(p => p.EnumValues != null);
-
-
-
                 foreach (var op in group.Value) {
-
-                    //writer.WriteLine(path.Print(2));
                     WriteOperation(op, writer, 2);
                 }
                 writer.WriteLine("\t}");
