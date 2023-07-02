@@ -19,7 +19,7 @@ namespace ApiGenerator {
         private readonly string _namespace;
         private readonly string _targetFolder;
         private readonly ApiDefaults _apiDefaults = new();
-        private readonly List<SwaggerApi> _swaggerApis = new();
+        private readonly Dictionary<string, List<SwaggerOperation>> _swaggerapis = new();
         private readonly List<SwaggerDefinition> _swaggerDefinitions = new ();
         private readonly Dictionary<string,NotificationSwaggerDefinition> _swaggernotification = new ();
         private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = new();
@@ -73,8 +73,9 @@ namespace ApiGenerator {
                                 foreach (var p in o.Value.AsObject()) {
                                     if (p.Value != null && p.Value is JsonObject) {
                                         if (p.Key.StartsWith("/")) {
-                                            var api = new SwaggerApi(p.Key, p.Value.AsObject());
-                                            _swaggerApis.Add(api);
+                                            ParseSwaggerOperation(p.Key, p.Value.AsObject());
+                                            //var api = new SwaggerApi(p.Key, p.Value.AsObject());
+                                            //_swaggerApis.Add(api);
                                         }
                                         else {
                                             throw new Exception("Unknown path " + p.Key);
@@ -205,6 +206,147 @@ namespace ApiGenerator {
                             Console.WriteLine("TODO: " + o.Key);
                             break;
                     }
+                }
+            }
+        }
+        private void ParseSwaggerOperation(string path, JsonObject o) {
+            foreach (var item in o) {
+                switch (item.Key) {
+                    case "get":
+                        if (item.Value is JsonObject) {
+                            var op = new SwaggerOperation(path, "Get", (JsonObject)item.Value);
+                            if (op.Tags?.Any() == true) {
+                                foreach (var t in op.Tags) {
+                                    if (_swaggerapis.ContainsKey(t)) {
+                                        _swaggerapis[t].Add(op);
+                                    }
+                                    else {
+                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                    }
+                                }
+                            }
+                            else {
+                                throw new Exception($"No tag found in operation {op.Path}");
+                            }
+                            //_operations.Add(op);
+                        }
+                        else {
+                            throw new Exception("Operation must be a JsonObject");
+                        }
+                        break;
+                    case "post":
+                        if (item.Value is JsonObject) {
+                            var op = new SwaggerOperation(path, "Post", (JsonObject)item.Value);
+                            if (op.Tags?.Any() == true) {
+                                foreach (var t in op.Tags) {
+                                    if (_swaggerapis.ContainsKey(t)) {
+                                        _swaggerapis[t].Add(op);
+                                    }
+                                    else {
+                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                    }
+                                }
+                            }
+                            else {
+                                throw new Exception($"No tag found in operation {op.Path}");
+                            }
+                            //_operations.Add(op);
+                        }
+                        else {
+                            throw new Exception("Operation must be a JsonObject");
+                        }
+                        break;
+                    case "put":
+                        if (item.Value is JsonObject) {
+                            var op = new SwaggerOperation(path, "Put", (JsonObject)item.Value);
+                            if (op.Tags?.Any() == true) {
+                                foreach (var t in op.Tags) {
+                                    if (_swaggerapis.ContainsKey(t)) {
+                                        _swaggerapis[t].Add(op);
+                                    }
+                                    else {
+                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                    }
+                                }
+                            }
+                            else {
+                                throw new Exception($"No tag found in operation {op.Path}");
+                            }
+                            //_operations.Add(op);
+                        }
+                        else {
+                            throw new Exception("Operation must be a JsonObject");
+                        }
+                        break;
+                    case "patch":
+                        if (item.Value is JsonObject) {
+                            var op = new SwaggerOperation(path, "Patch", (JsonObject)item.Value);
+                            if (op.Tags?.Any() == true) {
+                                foreach (var t in op.Tags) {
+                                    if (_swaggerapis.ContainsKey(t)) {
+                                        _swaggerapis[t].Add(op);
+                                    }
+                                    else {
+                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                    }
+                                }
+                            }
+                            else {
+                                throw new Exception($"No tag found in operation {op.Path}");
+                            }
+                            //_operations.Add(op);
+                        }
+                        else {
+                            throw new Exception("Operation must be a JsonObject");
+                        }
+                        break;
+                    case "delete":
+                        if (item.Value is JsonObject) {
+                            var op = new SwaggerOperation(path, "Delete", (JsonObject)item.Value);
+                            if (op.Tags?.Any() == true) {
+                                foreach (var t in op.Tags) {
+                                    if (_swaggerapis.ContainsKey(t)) {
+                                        _swaggerapis[t].Add(op);
+                                    }
+                                    else {
+                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                    }
+                                }
+                            }
+                            else {
+                                throw new Exception($"No tag found in operation {op.Path}");
+                            }
+                            //_operations.Add(op);
+                        }
+                        else {
+                            throw new Exception("Operation must be a JsonObject");
+                        }
+                        break;
+                    case "head":
+                        if (item.Value is JsonObject) {
+                            var op = new SwaggerOperation(path, "Head", (JsonObject)item.Value);
+                            if (op.Tags?.Any() == true) {
+                                foreach (var t in op.Tags) {
+                                    if (_swaggerapis.ContainsKey(t)) {
+                                        _swaggerapis[t].Add(op);
+                                    }
+                                    else {
+                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                    }
+                                }
+                            }
+                            else {
+                                throw new Exception($"No tag found in operation {op.Path}");
+                            }
+                            //_operations.Add(op);
+                        }
+                        else {
+                            throw new Exception("Operation must be a JsonObject");
+                        }
+                        break;
+                    default:
+                        Console.WriteLine(item.Key);
+                        break;
                 }
             }
         }
@@ -711,19 +853,21 @@ namespace ApiGenerator {
             }
         }
         public void CreateApis() {
-
-            foreach (var item in _swaggerApis) {
-                string apiName = item.Path.Substring("/api/v2/".Length);
-                if (apiName.Contains('/')) {
-                    apiName = apiName.Substring(0, apiName.IndexOf("/"));
-                }
-                if (_apis.ContainsKey(apiName)) {
-                    _apis[apiName].AddRange(item.Operations.Select(p => CreateApiOperation(p)).ToList());
-                }
-                else {
-                    _apis.Add(apiName, item.Operations.Select(p => CreateApiOperation(p)).ToList());
-                }
+            foreach (var item in _swaggerapis) {
+                _apis.Add(item.Key.Replace(" ","").Replace("&", ""), item.Value.Select(p => CreateApiOperation(p)).ToList());
             }
+            //foreach (var item in _swaggerApis) {
+            //    string apiName = item.Path.Substring("/api/v2/".Length);
+            //    if (apiName.Contains('/')) {
+            //        apiName = apiName.Substring(0, apiName.IndexOf("/"));
+            //    }
+            //    if (_apis.ContainsKey(apiName)) {
+            //        _apis[apiName].AddRange(item.Operations.Select(p => CreateApiOperation(p)).ToList());
+            //    }
+            //    else {
+            //        _apis.Add(apiName, item.Operations.Select(p => CreateApiOperation(p)).ToList());
+            //    }
+            //}
 
         }
         public void CreateModels() {
@@ -813,21 +957,18 @@ namespace ApiGenerator {
                 writer.WriteLine($"namespace {_namespace} {{");
                 writer.WriteIndent(1).WriteLine("public partial class NotificationChannel {");
                 writer.WriteIndent(2).WriteLine("static private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = new() {");
-                //            //{ \"v2.users.{id}.presence\", new EventTypeInfo(typeof(GenesysCloud.Client.V2.EventUserPresence), new string[] {\"UserId\" }) },\r\n            //{ \"v2.users.{id}.conversationsummary\", new EventTypeInfo(typeof(EventUserConversationSummary), new string[]{\"UserId\"}) },\r\n            //{ \"v2.users.{id}.routingStatus\", new EventTypeInfo(typeof(EventUserRoutingStatus), new string[]{\"UserId\"}) },\r\n            //{ \"v2.users.{id}.conversations.calls\", new EventTypeInfo(typeof(EventTopicCallConversation), new string[]{\"UserId\"}) }\r\n        };\r\n    }\r\n}");
                 foreach (var item in _topicTypeMap) {
                     writer.WriteIndent(3).Write($"{{ \"{item.Key}\", new TopicTypeInfo(typeof({item.Value.TypeName}),  ");
                     if (item.Value.TopicParameters?.Any() == true) {
                         writer.WriteLine($"new string[] {{ {string.Join(", ", item.Value.TopicParameters.Select(p => $"\"{p}\""))} }}) }},");
                     }
                     else {
-                        writer.WriteLine("new string[0]) },");
+                        writer.WriteLine("Array.Empty<string>()) },");
                     }
                 }
                 writer.WriteIndent(2).WriteLine("};");
                 writer.WriteIndent(1).WriteLine("}");
                 writer.WriteLine("}");
-
-
             }
         }
         private static ApiOperation CreateApiOperation(SwaggerOperation op) {
@@ -1125,22 +1266,14 @@ namespace ApiGenerator {
                         }
                         else if (item.TypeName == "DateTime" || item.TypeName == "DateTimeOffset" || item.TypeName == "DateOnly") {
                             if (item.IsRequired) {
-                                //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).Append("if(").Append(item.PName).Append(".HasValue && !string.IsNullOrEmpty(").Append(item.PName).AppendLine(".ToString())) {");
                                 writer.WriteIndent(indent + 2).WriteLine($"q_.Add(\"{item.Name}\", (({item.TypeName}){item.PName}).ToString(\"yyyy-MM-ddTHH:mm:ssZ\"));");
-                                //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("}");
-
-                            }
+                             }
                             else {
                                 writer.WriteIndent(indent + 2).WriteLine($"if({item.PName}.HasValue && !string.IsNullOrEmpty({item.PName}.ToString())) {{");
                                 writer.WriteIndent(indent + 3).WriteLine($"q_.Add(\"({item.Name}\", (({item.TypeName}){item.PName}).ToString(\"yyyy-MM-ddTHH:mm:ssZ\"));");
                                 writer.WriteIndent(indent + 2).WriteLine("}");
                             }
                         }
-                        //else if (item.IsEnum) {
-                        //    sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).Append("if(!string.IsNullOrEmpty(").Append(item.Name).AppendLine(")) {");
-                        //    sb.AppendJoin('\t', Enumerable.Repeat("", indent + 3)).Append("q_.Add(\"").Append(item.Name).Append("\", ").Append(item.Name).AppendLine(".ToString());");
-                        //    sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("}");
-                        //}
                         else if (item.IsCollection) {
                             writer.WriteIndent(indent + 2).WriteLine($"if({item.PName}?.Any() == true) {{");
                             writer.WriteIndent(indent + 3).WriteLine($"q_.Add(\"{item.Name}\", string.Join(\",\",{item.PName}));");
@@ -1190,9 +1323,6 @@ namespace ApiGenerator {
             
             writer.WriteIndent(indent + 2).WriteLine("using var response = await httpClient.SendAsync(request);");
 
-            //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("if (response.IsSuccessStatusCode) {");
-            //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("}");
-            //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("else {");
             if (operation.Responses != null) {
                 foreach (var item in operation.Responses.UnionBy(_apiDefaults.Responses, p => p.ResponseCode)) {
                     var def = _apiDefaults.Responses.SingleOrDefault(p => p.ResponseCode == item.ResponseCode);
@@ -1238,18 +1368,34 @@ namespace ApiGenerator {
                         }
                     }
                     else if (item.ResponseCode == "default") {
+                        writer.WriteIndent(indent + 2).WriteLine($"if (response.IsSuccessStatusCode) {{");
                         if (response != "void") {
                             if (response == "Action") { // Workaround for ambigous System.Action
                                 response = "Models." + response;
                             }
-                            writer.WriteIndent(indent + 2).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
-                            if (response != "int") {
-                                writer.WriteIndent(indent + 2).WriteLine("if(result == null) {");
-                                writer.WriteIndent(indent + 2).WriteLine($"throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
-                                writer.WriteIndent(indent + 2).WriteLine("}");
-                            }
-                            writer.WriteIndent(indent + 2).WriteLine("return result;");
+                            writer.WriteIndent(indent + 3).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
+                            writer.WriteIndent(indent + 3).WriteLine($"return result ?? throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
                         }
+                        else {
+                            writer.WriteIndent(indent + 3).WriteLine("return;");
+                        }
+                        writer.WriteIndent(indent + 2).WriteLine("}");
+
+                        //if (response != "void") {
+                        //    if (response == "Action") { // Workaround for ambigous System.Action
+                        //        response = "Models." + response;
+                        //    }
+                        //    writer.WriteIndent(indent + 2).WriteLine($"var result = await response.Content.ReadFromJsonAsync<{response}>();");
+                        //    if (response != "int") {
+                        //        writer.WriteIndent(indent + 2).WriteLine("if(result == null) {");
+                        //        writer.WriteIndent(indent + 2).WriteLine($"throw new ApiException(\"{CreateName(operation.Id)} returned empty body\");");
+                        //        writer.WriteIndent(indent + 2).WriteLine("}");
+                        //    }
+                        //    writer.WriteIndent(indent + 2).WriteLine("return result;");
+                        //}
+                        //else {
+                        //    Console.WriteLine("Handle default response");
+                        //}
                     }
                     else {
                         throw new Exception("Error in writing operation " + operation.Path);
@@ -1257,28 +1403,8 @@ namespace ApiGenerator {
                 }
             }
 
-            //foreach (var item in _apiDefaults.Responses.Where(p => p.ResponseCode)) { 
-
-            //}
             writer.WriteIndent(indent + 2).WriteLine($"throw new ApiException($\"Error {{response.StatusCode}} calling {CreateName(operation.Id)}\");");
-            //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("}");
-
-
-            //sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).AppendLine("response.EnsureSuccessStatusCode();");
-            //if (response != "void") {
-            //    sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).Append("return await response.Content.ReadFromJsonAsync<").Append(response).AppendLine(">();");
-            //}
-            //if (operation.Responses != null) {
-            //    foreach (var item in operation.Responses.Where(p => p.Type != response)) {
-            //        sb.AppendJoin('\t', Enumerable.Repeat("", indent + 2)).Append("// ").Append(item.Name).Append(": ").AppendLine(item.Type);
-            //    }
-            //}
-            //sb.AppendLine();
-
             writer.WriteIndent(indent + 1).WriteLine("}");
-
-            //writer.Write(sb.ToString());
-            //return sb.ToString();
         }
 
 
@@ -1328,7 +1454,7 @@ namespace ApiGenerator {
             }
             switch (schemeType) {
                 case "basic":
-                    return new BasicSecurityScheme() { Description = description };
+                    return new BasicSecurityScheme(key) { Description = description };
                 case "apiKey":
                     if (string.IsNullOrEmpty(parameterName)) {
                         throw new Exception("Missing name in SecurityScheme");
@@ -1336,7 +1462,7 @@ namespace ApiGenerator {
                     if (string.IsNullOrEmpty(in_)) {
                         throw new Exception("Missing \"in\" in SecurityScheme");
                     }
-                    return new ApiKeySecurityScheme(parameterName, in_);
+                    return new ApiKeySecurityScheme(parameterName, in_, key);
                 case "oauth2":
                     if (string.IsNullOrEmpty(flow)) {
                         throw new Exception("Missing flow in SecurityScheme");
@@ -1352,7 +1478,7 @@ namespace ApiGenerator {
                     if (scopes == null) {
                         throw new Exception("Missing scopes in SecurityScheme");
                     }
-                    return new OAuth2SecurityScheme(flow, authorizationUrl, tokenUrl, scopes);
+                    return new OAuth2SecurityScheme(flow, authorizationUrl, tokenUrl, scopes, key);
                 default:
                     throw new Exception("Unknown security scheme type " + schemeType);
             }
@@ -1432,7 +1558,7 @@ namespace ApiGenerator {
                 writer.WriteIndent(indent + 1).WriteLine("/// </summary>");
             }
             var notificationbase = model.IsNotification ? ": NotificationEvent " : "";
-            writer.WriteIndent(indent + 2).WriteLine($"public class {model.Name} {notificationbase}{{");
+            writer.WriteIndent(indent + 1).WriteLine($"public class {model.Name} {notificationbase}{{");
             if (model.Properties != null) {
                 //foreach (var item in EnumDefinitions) {
                 foreach (var item in model.EnumDefinitions) {
@@ -1445,15 +1571,14 @@ namespace ApiGenerator {
                     WriteProperty(item, writer, indent + 1);
                 }
                 if (model.TopicParameters != null) {
-                    writer.WriteIndent(indent + 1).WriteLine("// Topic parameter");
+                    writer.WriteIndent(indent + 2).WriteLine("// Topic parameter");
                     foreach (var item in model.TopicParameters) {
-                        writer.WriteIndent(indent + 1).WriteLine($"public string Notification{item} {{ get; set; }}");
+                        writer.WriteIndent(indent + 2).WriteLine($"public string Notification{item} {{ get; set; }}");
                     }
                 }
                 writer.WriteLine("#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.\r\n");
             }
             writer.WriteIndent(indent + 1).WriteLine("}");
-            //return sb.ToString();
         }
 
         static void WriteEnumDefinition(string name, Dictionary<string,string> values, StreamWriter writer, int indent) {

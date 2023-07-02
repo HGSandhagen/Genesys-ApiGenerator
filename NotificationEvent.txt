@@ -5,5 +5,5 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace {TargetNamespace} {
-    public class NotificationEvent : EventArgs { }
+    public class NotificationEvent { }
 }

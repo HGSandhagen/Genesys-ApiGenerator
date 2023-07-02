@@ -1,19 +1,33 @@
 ﻿using {TargetNamespace}.Models;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace {TargetNamespace} {
-    internal class Notifications {
+    public class Notifications : IDisposable {
         private readonly ConnectionManager _connectionManager;
         private readonly List<NotificationChannel> _channels;
         private readonly NotificationsApi _notificationsApi;
         private readonly ILogger _logger;
         private readonly ILoggerFactory _loggerFactory;
+        private bool disposedValue;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Notifications"/> class.
+        /// </summary>
+        /// <param name="connectionManager"></param>
+        public Notifications(ConnectionManager connectionManager) {
+            _connectionManager = connectionManager;
+            _channels = new List<NotificationChannel>();
+            _notificationsApi = new NotificationsApi(_connectionManager, NullLogger<NotificationsApi>.Instance);
+            _logger = NullLogger<Notifications>.Instance;
+            _loggerFactory = NullLoggerFactory.Instance;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Notifications"/> class with api logging.
+        /// </summary>
+        /// <param name="connectionManager">The <see cref="ConnectionManager"/> which handle the api connection.</param>
+        /// <param name="loggerFactory">The logger factiory for api logging.</param>
         public Notifications(ConnectionManager connectionManager, ILoggerFactory loggerFactory) {
             _connectionManager = connectionManager;
             _channels = new List<NotificationChannel>();
@@ -21,29 +35,69 @@ namespace {TargetNamespace} {
             _logger = loggerFactory.CreateLogger<Notifications>();
             _loggerFactory = loggerFactory;
         }
+
+        /// <summary>
+        /// Returns the collection of <see cref="AvailableTopic"/>.
+        /// </summary>
+        /// <param name="expand">A collection of additional properties to return.</param>
+        /// <returns>An <c>IEnumerable<AvailableTopic>></c>.</returns>
         public async Task<IEnumerable<AvailableTopic>?> GetAvailableTopics(IEnumerable<NotificationsApi.GetNotificationsAvailabletopicsExpandConstant>? expand = null) {
             var listing = await _notificationsApi.GetNotificationsAvailabletopics(expand);
             return listing?.Entities;
         }
-        public async Task<NotificationChannel?> CreateChannel() {
+
+        public IEnumerable<NotificationChannel> GetChannels() { return _channels; }
+        /// <summary>
+        /// Creates a new notification channel.
+        /// </summary>
+        /// <returns>The new channel.</returns>
+        public async Task<NotificationChannel> CreateChannel() {
             var channel = await _notificationsApi.PostNotificationsChannels();
-            if (channel == null) {
-                return null;
-            }
             var notificationChannel = new NotificationChannel(_notificationsApi, channel, _loggerFactory.CreateLogger<NotificationChannel>());
-            if (notificationChannel != null) {
-                _channels.Add(notificationChannel);
-            }
+            _channels.Add(notificationChannel);
             return notificationChannel;
         }
-        public async Task RemoveChannel(string channelId) {
+
+        /// <summary>
+        /// Closes the notification channel and its subscription and removes it from the list of channels. 
+        /// </summary>
+        /// <param name="channelId"></param>
+        /// <returns></returns>
+        public void RemoveChannel(string channelId) {
             var channel = _channels.SingleOrDefault(p => p.Id == channelId);
             if (channel != null) {
                 if (channel.HasSubscriptions) {
-                    await channel.DeleteSubscription();
+                    channel.Dispose();
                 }
                 _channels.Remove(channel);
             }
+        }
+
+        protected virtual void Dispose(bool disposing) {
+            if (!disposedValue) {
+                if (disposing) {
+                    foreach (var channel in _channels.ToList()) {
+                        RemoveChannel(channel.Id);
+                    }
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
+            }
+        }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~Notifications()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
+
+        public void Dispose() {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

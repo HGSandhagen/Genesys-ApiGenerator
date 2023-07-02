@@ -1,8 +1,9 @@
 ﻿
 namespace ApiGenerator {
     internal class SecurityScheme {
-        public SecurityScheme(string type) {
+        public SecurityScheme(string type, string? displayName) {
             SchemeType = type;
+            DisplayName = displayName;
         }
         /// <summary>
         /// The type of the security scheme.Valid values are "basic", "apiKey" or "oauth2".
@@ -12,12 +13,13 @@ namespace ApiGenerator {
         /// A short description for security scheme.
         /// </summary>
         public string? Description { get; set; }
+        public string? DisplayName { get; set; }
     }
     internal class BasicSecurityScheme : SecurityScheme { 
-        public BasicSecurityScheme() : base("basic") { }
+        public BasicSecurityScheme(string displayName) : base("basic", displayName) { }
     }
     internal class ApiKeySecurityScheme : SecurityScheme {
-        public ApiKeySecurityScheme(string name, string @in) : base("apiKey") {
+        public ApiKeySecurityScheme(string name, string @in, string displayName) : base("apiKey", displayName) {
             Name = name;
             In = @in;
         }
@@ -32,7 +34,7 @@ namespace ApiGenerator {
         public string In { get; set; }
     }
     internal class OAuth2SecurityScheme : SecurityScheme {
-        public OAuth2SecurityScheme(string flow, string authorizationUrl, string? tokenUrl, IEnumerable<Scope> scopes) : base("oauth2") {
+        public OAuth2SecurityScheme(string flow, string authorizationUrl, string? tokenUrl, IEnumerable<Scope> scopes, string displayName) : base("oauth2", displayName) {
             Flow = flow;
             AuthorizationUrl = authorizationUrl;
             TokenUrl = tokenUrl;

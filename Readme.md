@@ -65,7 +65,6 @@ GenesysCloudCredentials credentials = new GenesysCloudCredentials() {
 };
 ConnectionManager connectionManager = new ConnectionManager(credentials);
 
-// 
 UsersApi usersApi = new UsersApi(connectionManager);
 
 var users = await usersApi.GetUsers();
@@ -103,3 +102,44 @@ To use the API add it to the constructor of your service:
 ```csharp
 public MyService(UserApi userApi, ...)
 ```
+
+### Notifications
+
+To use notifications initialize an instance of ```Notifications``` with ```ConnectionManager``` and optional logger as described above.
+```csharp
+Notifications notifications = new(connectionManager);
+```
+
+Create a channel to receive notification events:
+
+```csharp
+var channel = await notifications.CreateChannel();
+```
+
+Register an event handler to receive notifications (Example user presence):
+
+```csharp
+channel.NotificationReceived += (e) => {
+    switch (e) {
+        case PresenceEventV2UserPresence pe:
+            Console.WriteLine($"{pe.NotificationUserId}: {pe.PresenceDefinition?.SystemPresence}");
+            break;
+        default:
+            Console.WriteLine("Unexpected event " + e.GetType().Name + " received");
+            break;
+    }
+};
+```
+
+Subscribe a notification (Example user presence of user 00000000-0000-0000-0000-000000000000):
+
+```csharp
+await channel.SetTopics(new List<ChannelTopic>() { new ChannelTopic() { Id = "v2.users.00000000-0000-0000-0000-000000000000.presence" } });
+```
+This open a websocket connection to receive the notifications.
+
+Use ```AddTopics``` to add additional topics to the subscription. Use ```SetTopics``` to replace the list of topics in the subscription with a new one.
+
+Call ```channel.DeleteTopics() or ```notifications.RemoveChannel``` to stop the receive of notifications and stop the underlying websocket.
+
+To find the available topics and the corresponding NotificationEvent classes have a look at ```NotificationChannelTopicMap.cs```.

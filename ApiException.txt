@@ -1,23 +1,20 @@
 ﻿using {TargetNamespace}.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace {TargetNamespace} {
     public class ApiException : Exception {
         public ErrorBody? ErrorBody { get; private set; }
         public ErrorInfo? ErrorInfo { get; private set; }
+        public ScimError? ScimError { get; private set; }
         public ApiException(string message) : base(message) { }
-        internal ApiException(string message, ErrorInfo? errorInfo) : base(message) {
+        internal ApiException(string message, ErrorInfo? errorInfo) : base(errorInfo?.Message != null ? "Error " + errorInfo.Message : message) {
             ErrorInfo = errorInfo;
         }
-        internal ApiException(string message, ErrorBody? errorBody) : base(message) {
+        internal ApiException(string message, ErrorBody? errorBody) : base(errorBody?.Message != null ? "Error " + errorBody.Message : message) {
             ErrorBody = errorBody;
         }
         internal ApiException(string message, ScimError? scimError) : base(message) {
-            
+            ScimError = scimError;
             // TODO: Handle ScimError
         }
-
     }
 }

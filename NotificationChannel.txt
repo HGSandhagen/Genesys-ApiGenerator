@@ -1,43 +1,64 @@
 ﻿using {TargetNamespace}.Models;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace {TargetNamespace} {
-        public partial class NotificationChannel {
-            private readonly NotificationsApi _notificationsApi;
-            private readonly Models.Channel _channel;
-            private readonly ILogger _logger;
-            private IEnumerable<ChannelTopic>? _subscriptions;
-            private Task? _webSocketTask;
-            //private bool disposedValue;
-            private readonly CancellationTokenSource _cancellationTokenSource = new();
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-            public NotificationChannel(NotificationsApi notificationsApi, Models.Channel channel, ILogger<NotificationChannel> logger) {
-                _notificationsApi = notificationsApi;
-                _channel = channel;
-                _logger = logger;
-            }
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+    /// <summary>
+    /// The <c>NotificationChannel</c> handles the subscribtions of a channel an the websocket connection.
+    /// </summary>
+    public partial class NotificationChannel : IDisposable {
+        private readonly NotificationsApi _notificationsApi;
+        private readonly Models.Channel _channel;
+        private readonly ILogger _logger;
+        private readonly CancellationTokenSource _cancellationTokenSource = new();
+        private IEnumerable<ChannelTopic>? _subscriptions;
+        private Task? _webSocketTask;
+        private Timer _timer;
+        private bool disposedValue;
 
-            public string Id => _channel.Id ?? "";
-            public bool HasSubscriptions => _subscriptions != null;
-            public DateTimeOffset? Expires => _channel.Expires;
-            public delegate void Notify(NotificationEvent notification);
-            public event Notify NotificationReceived;
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+        internal NotificationChannel(NotificationsApi notificationsApi, Models.Channel channel, ILogger<NotificationChannel> logger) {
+            _notificationsApi = notificationsApi;
+            _channel = channel;
+            _logger = logger;
+            _timer = new Timer(ExpirationTimerCallback);
+        }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+        /// <summary>
+        /// Returns the id of the underlying channel.
+        /// </summary>
+        public string Id => _channel.Id ?? "";
+        /// <summary>
+        /// Retrun <c>true</c> if the channel has subscriptions, otherwise false.
+        /// </summary>
+        public bool HasSubscriptions => _subscriptions != null;
+        /// <summary>
+        /// Returns the date and time when the subscription of the channel expires.
+        /// </summary>
+        public DateTimeOffset? Expires => _channel.Expires;
+        public delegate void Notify(NotificationEvent notification);
+        /// <summary>
+        /// The event when a notification is received.
+        /// </summary>
+        public event Notify NotificationReceived;
+        /// <summary>
+        /// Checks, whether the underlying channel exists or not.
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="ObjectDisposedException"></exception>
         public async Task<bool> CheckChannel() {
+            if (disposedValue) {
+                throw new ObjectDisposedException(nameof(NotificationChannel));
+            } 
             if (_channel.Id != null) {
                 try {
                     await _notificationsApi.HeadNotificationsChannel(_channel.Id);
                 }
                 catch (Exception ex) {
-                    _logger.LogError(ex, "Could not find notification channel {0}", _channel.Id);
+                    _logger.LogError(ex, "Could not find notification channel {id}", _channel.Id);
                     return false;
                 }
                 return true;
@@ -46,124 +67,209 @@ namespace {TargetNamespace} {
                 return false;
             }
         }
-            public async Task<IEnumerable<ChannelTopic>?> GetSubscriptions() {
-                if (_channel.Id != null) {
-                    var subscriptions = await _notificationsApi.GetNotificationsChannelSubscriptions(_channel.Id);
-                    return subscriptions?.Entities;
-                }
-                return null;
+        /// <summary>
+        /// Get the active subscriptions of the channel.
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="ObjectDisposedException"></exception>
+        public async Task<IEnumerable<ChannelTopic>?> GetSubscriptions() {
+            if (disposedValue) {
+                throw new ObjectDisposedException(nameof(NotificationChannel));
             }
-            public async Task<IEnumerable<ChannelTopic>?> CreateSubscription(IEnumerable<ChannelTopic> channelTopics) {
-                if (_channel.Id != null) {
-                    var topics = await _notificationsApi.PostNotificationsChannelSubscriptions(_channel.Id, channelTopics);
-                    _subscriptions = channelTopics;
-                    _webSocketTask = Task.Run(() => RunWebsocket(_cancellationTokenSource.Token));
-                    return topics?.Entities;
-                }
-                return null;
+            if (_channel.Id != null) {
+                var channelTopics = await _notificationsApi.GetNotificationsChannelSubscriptions(_channel.Id);
+                _subscriptions = channelTopics?.Entities;
+                return channelTopics?.Entities;
             }
-            public async Task<IEnumerable<ChannelTopic>?> ChangeSubscription(IEnumerable<ChannelTopic> channelTopics) {
-                if (_channel.Id != null) {
-                    var topics = await _notificationsApi.PutNotificationsChannelSubscriptions(_channel.Id, channelTopics);
-                    _subscriptions = channelTopics;
-                    var channels = await _notificationsApi.GetNotificationsChannels();
+            return null;
+        }
+        /// <summary>
+        /// Adds a new set of topics to the current one.
+        /// </summary>
+        /// <param name="channelTopics">The topics to subscribe.</param>
+        /// <returns>The current set of topics.</returns>
+        /// <exception cref="ObjectDisposedException"></exception>
+        public async Task<IEnumerable<ChannelTopic>?> AddTopics(IEnumerable<ChannelTopic> channelTopics) {
+            if (disposedValue) {
+                throw new ObjectDisposedException(nameof(NotificationChannel));
+            }
+            if (_channel.Id != null) {
+                var topics = await _notificationsApi.PostNotificationsChannelSubscriptions(_channel.Id, channelTopics);
+                _subscriptions = channelTopics;
+                _webSocketTask = Task.Run(() => RunWebsocket(_cancellationTokenSource.Token));
+                var channels = await _notificationsApi.GetNotificationsChannels();
+                if (channels?.Entities?.Any(p => p.Id == _channel.Id) == true) {
+                    _channel.Expires = channels.Entities.Single(p => p.Id == _channel.Id).Expires;
+                    if (_channel.Expires != null) {
+                        _timer.Change((int)(_channel.Expires.Value.AddMinutes(-5) - DateTime.UtcNow).TotalMilliseconds, Timeout.Infinite);
+                    }
+                }
+                _logger.LogTrace("Channel {id} expires at {expires}", _channel.Id, _channel.Expires);
+                return topics?.Entities;
+            }
+            return null;
+        }
 
-                    if (channels?.Entities?.Any(p => p.Id == _channel.Id) == true) {
-                        _channel.Expires = channels.Entities.Single(p => p.Id == _channel.Id).Expires;
-                    } 
-
-                    //_channel.Expires = DateTime.UtcNow;
-                    return topics?.Entities;
-                }
-                return null;
+        /// <summary>
+        /// Replaces the current set of topics with a new one.
+        /// </summary>
+        /// <param name="channelTopics"></param>
+        /// <returns>The new current set of topics.</returns>
+        /// <exception cref="ObjectDisposedException"></exception>
+        public async Task<IEnumerable<ChannelTopic>?> SetTopics(IEnumerable<ChannelTopic> channelTopics) {
+            if (disposedValue) {
+                throw new ObjectDisposedException(nameof(NotificationChannel));
             }
-            public async Task DeleteSubscription() {
-                if (_channel.Id != null) {
-                    await _notificationsApi.DeleteNotificationsChannelSubscriptions(_channel.Id);
-                    _subscriptions = null;
-                    _cancellationTokenSource.Cancel();
-                    if (_webSocketTask != null) {
-                        await _webSocketTask.WaitAsync(TimeSpan.FromSeconds(1));
-                        _webSocketTask = null;
+            _logger.LogTrace("ChangeSubscription([{topics}])", string.Join(",", channelTopics.Select(p => p.Id)));
+            if (_channel.Id != null) {
+                var topics = await _notificationsApi.PutNotificationsChannelSubscriptions(_channel.Id, channelTopics);
+                _subscriptions = channelTopics;
+                var channels = await _notificationsApi.GetNotificationsChannels();
+                if (channels?.Entities?.Any(p => p.Id == _channel.Id) == true) {
+                    _channel.Expires = channels.Entities.Single(p => p.Id == _channel.Id).Expires;
+                    if (_channel.Expires != null) {
+                        _timer.Change((int)(_channel.Expires.Value.AddMinutes(-5) - DateTime.UtcNow).TotalMilliseconds, Timeout.Infinite);
+                    }
+                }
+                _logger.LogTrace("Channel {id} expires at {expires}", _channel.Id, _channel.Expires);
+                return topics?.Entities;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Removes all topics, stops the websocket connection.
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="ObjectDisposedException"></exception>
+        public async Task DeleteTopics() {
+            if (disposedValue) {
+                throw new ObjectDisposedException(nameof(NotificationChannel));
+            }
+            if (_channel.Id != null) {
+                await _notificationsApi.DeleteNotificationsChannelSubscriptions(_channel.Id);
+                _timer.Change(Timeout.Infinite, Timeout.Infinite);
+                _subscriptions = null;
+                _cancellationTokenSource.Cancel();
+                if (_webSocketTask != null) {
+                    await _webSocketTask.WaitAsync(TimeSpan.FromSeconds(1));
+                    _webSocketTask = null;
+                }
+            }
+        }
+
+        private async void ExpirationTimerCallback(object? state) {
+            try {
+                bool test = await CheckChannel();
+                if (test) {
+                    if (_subscriptions != null) {
+                        await SetTopics(_subscriptions);
                     }
                 }
             }
-            private async Task RunWebsocket(CancellationToken cancellationToken) {
-                if (_channel.ConnectUri == null) {
-                    throw new Exception($"No connection uri for channel {_channel.Id} found");
+            catch(Exception ex) {
+                _logger.LogError(ex, "Error in TimerCallback: ");
+            }
+        }
+        private async Task RunWebsocket(CancellationToken cancellationToken) {
+            if (_channel.ConnectUri == null) {
+                throw new Exception($"No connection uri for channel {_channel.Id} found");
+            }
+            _logger.LogInformation("Websocket started");
+            while (!cancellationToken.IsCancellationRequested) {
+                using (var socket = new ClientWebSocket()) {
+                    try {
+                        await socket.ConnectAsync(_channel.ConnectUri, cancellationToken);
+                        _logger.LogInformation("Websocket connected");
+                        await Receive(socket, cancellationToken);
+                    }
+                    catch (System.Threading.Tasks.TaskCanceledException) {
+                        // Do nothing
+                    }
+                    catch (Exception ex) {
+                        _logger.LogError(ex, "ERROR: ");
+                    }
                 }
-                _logger.LogInformation("Websocket started");
-                while (!cancellationToken.IsCancellationRequested) {
-                    using (var socket = new ClientWebSocket()) {
-                        try {
-                            await socket.ConnectAsync(_channel.ConnectUri, cancellationToken);
-                            _logger.LogInformation("Websocket connected");
-                            await Receive(socket, cancellationToken);
-                        }
-                        catch (System.Threading.Tasks.TaskCanceledException) {
-                            // Do nothing
-                        }
-                        catch (Exception ex) {
-                            _logger.LogError(ex, "ERROR: ");
+                _logger.LogInformation("ClientWebSocket disposed");
+            };
+        }
+        private async Task Receive(ClientWebSocket socket, CancellationToken cancellationToken) {
+            var buffer = new ArraySegment<byte>(new byte[2048]);
+            while (!cancellationToken.IsCancellationRequested) {
+                WebSocketReceiveResult result;
+                using (var ms = new MemoryStream()) {
+                    do {
+                        result = await socket.ReceiveAsync(buffer, cancellationToken);
+                        ms.Write(buffer.ToArray(), buffer.Offset, result.Count);
+                    } while (!result.EndOfMessage);
+                    if (result.MessageType == WebSocketMessageType.Close) {
+                        _logger.LogInformation("Websocket closed");
+                        break;
+                    }
+                    ms.Seek(0, SeekOrigin.Begin);
+                    using (var reader = new StreamReader(ms, Encoding.UTF8)) {
+                        string msg = await reader.ReadToEndAsync();
+                        var ev = ParseNotificationEvent(msg);
+                        if (ev != null) {
+                            NotificationReceived?.Invoke(ev);
                         }
                     }
-                    _logger.LogInformation("ClientWebSocket disposed");
-                };
-            }
-            async Task Receive(ClientWebSocket socket, CancellationToken cancellationToken) {
-                var buffer = new ArraySegment<byte>(new byte[2048]);
-                while (!cancellationToken.IsCancellationRequested) {
-                    WebSocketReceiveResult result;
-                    using (var ms = new MemoryStream()) {
-                        do {
-                            result = await socket.ReceiveAsync(buffer, cancellationToken);
-                            ms.Write(buffer.ToArray(), buffer.Offset, result.Count);
-                        } while (!result.EndOfMessage);
-                        if (result.MessageType == WebSocketMessageType.Close) {
-                            _logger.LogInformation("Websocket closed");
-                            break;
-                        }
-                        ms.Seek(0, SeekOrigin.Begin);
-                        using (var reader = new StreamReader(ms, Encoding.UTF8)) {
-                            string msg = await reader.ReadToEndAsync();
-                            var ev = ParseNotificationEvent(msg);
-                            if (ev != null) {
-                                NotificationReceived?.Invoke(ev);
-                            }
-                        }
-                    }
-                };
-                _logger.LogInformation("Receive ended");
-            }
-            public static NotificationEvent? ParseNotificationEvent(string jsonString) {
-                System.Diagnostics.Debug.WriteLine(jsonString);
-                var item = JsonSerializer.Deserialize<NotificationData<JsonElement>>(jsonString);
-                foreach (var key in _topicTypeMap.Keys) {
-                    if (item != null && item.TopicName != null) {
-                        var match = Regex.Match(item.TopicName, key.Replace("{id}", "([0123456789abcdef-]+)"));
+                }
+            };
+            _logger.LogInformation("Receive ended");
+        }
+        private NotificationEvent? ParseNotificationEvent(string jsonString) {
+            System.Diagnostics.Debug.WriteLine(jsonString);
+            var item = JsonSerializer.Deserialize<NotificationData<JsonElement>>(jsonString);
+            foreach (var key in _topicTypeMap.Keys) {
+                if (item != null && item.TopicName != null) {
+                    var match = Regex.Match(item.TopicName, key.Replace("{id}", "([0123456789abcdef-]+)"));
 
-                        if (match.Groups.Count > 1) {
-                            var notificationType = _topicTypeMap[key];
-                            // TODO: Expand to more than one topic parameters
-                            //var genericNotificationType = typeof(NotificationData<>);
-                            //var specificNotificationType = genericNotificationType.MakeGenericType(notificationType.Type);
-                            //var notification = JsonSerializer.Deserialize(json, specificNotificationType) as INotificationData;
-                            var notification = JsonSerializer.Deserialize(item.EventBody, notificationType.Type) as NotificationEvent;
-                            if (notification != null) {
-                                if (notificationType.TopicParameters?.Any() == true) {
-                                    foreach(var param in notificationType.TopicParameters) {
-                                        var propertyInfo = typeof(NotificationEvent).GetProperty("Notification" + param);
-                                        propertyInfo?.SetValue(notification, match.Groups[1].Value);
-                                    }
+                    if (match.Groups.Count > 1) {
+                        var notificationType = _topicTypeMap[key];
+                        var notification = JsonSerializer.Deserialize(item.EventBody, notificationType.Type) as NotificationEvent;
+                        if (notification != null) {
+                            if (notificationType.TopicParameters?.Any() == true) {
+                                foreach (var param in notificationType.TopicParameters) {
+                                    var propertyInfo = notificationType.Type.GetProperty("Notification" + param);
+                                    propertyInfo?.SetValue(notification, match.Groups[1].Value);
                                 }
                             }
-                            return notification;
                         }
+                        return notification;
                     }
+                    _logger.LogWarning("Unknown topic {topic} found in websocket messgage", item.TopicName);
                 }
-                return null;
             }
+            return null;
+        }
 
+        protected virtual void Dispose(bool disposing) {
+            if (!disposedValue) {
+                if (disposing) {
+                    DeleteTopics().Wait();
+                    _timer.Dispose();
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
+            }
+        }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~NotificationChannel()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
+
+        public void Dispose() {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
+}
+
 
