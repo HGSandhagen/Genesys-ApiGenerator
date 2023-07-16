@@ -3,9 +3,10 @@ using Microsoft.Extensions.Logging;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
-namespace {TargetNamespace} {
+namespace GenesysCloud.Client.V2 {
     /// <summary>
     /// The <c>NotificationChannel</c> handles the subscribtions of a channel an the websocket connection.
     /// </summary>
@@ -14,9 +15,9 @@ namespace {TargetNamespace} {
         private readonly Models.Channel _channel;
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cancellationTokenSource = new();
+        private readonly Timer _timer;
         private IEnumerable<ChannelTopic>? _subscriptions;
         private Task? _webSocketTask;
-        private Timer _timer;
         private bool disposedValue;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
@@ -96,7 +97,7 @@ namespace {TargetNamespace} {
             if (_channel.Id != null) {
                 var topics = await _notificationsApi.PostNotificationsChannelSubscriptions(_channel.Id, channelTopics);
                 _subscriptions = channelTopics;
-                _webSocketTask = Task.Run(() => RunWebsocket(_cancellationTokenSource.Token));
+                _webSocketTask ??= Task.Run(() => RunWebsocket(_cancellationTokenSource.Token));
                 var channels = await _notificationsApi.GetNotificationsChannels();
                 if (channels?.Entities?.Any(p => p.Id == _channel.Id) == true) {
                     _channel.Expires = channels.Entities.Single(p => p.Id == _channel.Id).Expires;
@@ -124,6 +125,7 @@ namespace {TargetNamespace} {
             if (_channel.Id != null) {
                 var topics = await _notificationsApi.PutNotificationsChannelSubscriptions(_channel.Id, channelTopics);
                 _subscriptions = channelTopics;
+                _webSocketTask ??= Task.Run(() => RunWebsocket(_cancellationTokenSource.Token));
                 var channels = await _notificationsApi.GetNotificationsChannels();
                 if (channels?.Entities?.Any(p => p.Id == _channel.Id) == true) {
                     _channel.Expires = channels.Entities.Single(p => p.Id == _channel.Id).Expires;
@@ -197,23 +199,21 @@ namespace {TargetNamespace} {
             var buffer = new ArraySegment<byte>(new byte[2048]);
             while (!cancellationToken.IsCancellationRequested) {
                 WebSocketReceiveResult result;
-                using (var ms = new MemoryStream()) {
-                    do {
-                        result = await socket.ReceiveAsync(buffer, cancellationToken);
-                        ms.Write(buffer.ToArray(), buffer.Offset, result.Count);
-                    } while (!result.EndOfMessage);
-                    if (result.MessageType == WebSocketMessageType.Close) {
-                        _logger.LogInformation("Websocket closed");
-                        break;
-                    }
-                    ms.Seek(0, SeekOrigin.Begin);
-                    using (var reader = new StreamReader(ms, Encoding.UTF8)) {
-                        string msg = await reader.ReadToEndAsync();
-                        var ev = ParseNotificationEvent(msg);
-                        if (ev != null) {
-                            NotificationReceived?.Invoke(ev);
-                        }
-                    }
+                using var ms = new MemoryStream();
+                do {
+                    result = await socket.ReceiveAsync(buffer, cancellationToken);
+                    ms.Write(buffer.ToArray(), buffer.Offset, result.Count);
+                } while (!result.EndOfMessage);
+                if (result.MessageType == WebSocketMessageType.Close) {
+                    _logger.LogInformation("Websocket closed");
+                    break;
+                }
+                ms.Seek(0, SeekOrigin.Begin);
+                using var reader = new StreamReader(ms, Encoding.UTF8);
+                string msg = await reader.ReadToEndAsync();
+                var ev = ParseNotificationEvent(msg);
+                if (ev != null) {
+                    NotificationReceived?.Invoke(ev);
                 }
             };
             _logger.LogInformation("Receive ended");
@@ -223,6 +223,15 @@ namespace {TargetNamespace} {
             var item = JsonSerializer.Deserialize<NotificationData<JsonElement>>(jsonString);
             foreach (var key in _topicTypeMap.Keys) {
                 if (item != null && item.TopicName != null) {
+                    if(item.TopicName == "channel.MetaData") {
+                        if(item.EventBody.ValueKind == JsonValueKind.Object) {
+                            var metadata = JsonSerializer.Deserialize<ChannelMetadata>(item.EventBody);
+                            if(metadata?.Message == "Heartbeat received") {
+                                // Heartbeat received
+                            }
+                        }
+                        _logger.LogTrace("ChannelMetadata.Message received: {data}", item.EventBody.ToString());
+                    }
                     var match = Regex.Match(item.TopicName, key.Replace("{id}", "([0123456789abcdef-]+)"));
 
                     if (match.Groups.Count > 1) {
@@ -238,9 +247,9 @@ namespace {TargetNamespace} {
                         }
                         return notification;
                     }
-                    _logger.LogWarning("Unknown topic {topic} found in websocket messgage", item.TopicName);
                 }
             }
+            _logger.LogWarning("Unknown topic {topic} found in websocket messgage", item?.TopicName);
             return null;
         }
 
@@ -270,6 +279,8 @@ namespace {TargetNamespace} {
             GC.SuppressFinalize(this);
         }
     }
+    public class ChannelMetadata {
+        [JsonPropertyName("message")]
+        public string? Message { get; set; }
+    }
 }
-
-
