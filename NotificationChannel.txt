@@ -221,21 +221,24 @@ namespace GenesysCloud.Client.V2 {
         private NotificationEvent? ParseNotificationEvent(string jsonString) {
             System.Diagnostics.Debug.WriteLine(jsonString);
             var item = JsonSerializer.Deserialize<NotificationData<JsonElement>>(jsonString);
-            foreach (var key in _topicTypeMap.Keys) {
-                if (item != null && item.TopicName != null) {
-                    if(item.TopicName == "channel.MetaData") {
-                        if(item.EventBody.ValueKind == JsonValueKind.Object) {
-                            var metadata = JsonSerializer.Deserialize<ChannelMetadata>(item.EventBody);
-                            if(metadata?.Message == "Heartbeat received") {
-                                // Heartbeat received
-                            }
+            if (item != null && item.TopicName != null) {
+                if (item.TopicName == "channel.metadata") {
+                    if (item.EventBody.ValueKind == JsonValueKind.Object) {
+                        var metadata = JsonSerializer.Deserialize<ChannelMetadata>(item.EventBody);
+                        if (metadata?.Message == "WebSocket Heartbeat") {
+                            // Heartbeat received
+                            return null;
                         }
-                        _logger.LogTrace("ChannelMetadata.Message received: {data}", item.EventBody.ToString());
                     }
-                    var match = Regex.Match(item.TopicName, key.Replace("{id}", "([0123456789abcdef-]+)"));
+                    _logger.LogTrace("ChannelMetadata received: {data}", item.EventBody.ToString());
+                    return null;
+                }
+                foreach (var key in _topicTypeMap.Keys) {
+                    var match = Regex.Match(item.TopicName, key.Replace("{id}", "([0123456789abcdef-]+)") + "$");
 
                     if (match.Groups.Count > 1) {
                         var notificationType = _topicTypeMap[key];
+                        //System.Diagnostics.Debug.WriteLine("Topic: " + item.TopicName + ", Key: " + key + ", Type: " + notificationType.Type);
                         var notification = JsonSerializer.Deserialize(item.EventBody, notificationType.Type) as NotificationEvent;
                         if (notification != null) {
                             if (notificationType.TopicParameters?.Any() == true) {
@@ -249,7 +252,7 @@ namespace GenesysCloud.Client.V2 {
                     }
                 }
             }
-            _logger.LogWarning("Unknown topic {topic} found in websocket messgage", item?.TopicName);
+           _logger.LogWarning("Unknown topic {topic} found in websocket messgage", item?.TopicName);
             return null;
         }
 
