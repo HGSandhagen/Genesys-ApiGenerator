@@ -121,7 +121,7 @@ namespace GenesysCloud.Client.V2 {
             if (disposedValue) {
                 throw new ObjectDisposedException(nameof(NotificationChannel));
             }
-            _logger.LogTrace("ChangeSubscription([{topics}])", string.Join(",", channelTopics.Select(p => p.Id)));
+            _logger.LogTrace("ChangeSubscription()");
             if (_channel.Id != null) {
                 var topics = await _notificationsApi.PutNotificationsChannelSubscriptions(_channel.Id, channelTopics);
                 _subscriptions = channelTopics;
@@ -131,9 +131,10 @@ namespace GenesysCloud.Client.V2 {
                     _channel.Expires = channels.Entities.Single(p => p.Id == _channel.Id).Expires;
                     if (_channel.Expires != null) {
                         _timer.Change((int)(_channel.Expires.Value.AddMinutes(-5) - DateTime.UtcNow).TotalMilliseconds, Timeout.Infinite);
+                        //_timer.Change((int)(new TimeSpan(0,10,0).TotalMilliseconds), Timeout.Infinite);
                     }
+                    _logger.LogTrace("Channel {id} expires at {expires}", _channel.Id, _channel.Expires);
                 }
-                _logger.LogTrace("Channel {id} expires at {expires}", _channel.Id, _channel.Expires);
                 return topics?.Entities;
             }
             return null;
