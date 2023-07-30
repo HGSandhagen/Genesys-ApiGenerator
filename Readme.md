@@ -11,7 +11,8 @@ The goal is to create a SDK with
   
 At the moment it only generates a .NET project and source files.
 
-To build the application clone the repo and run ```dotnet publish -c Release``` from the main directory.
+To build the application clone the repo and run from the main directory ```dotnet publish -c Release -r <rid>``` where ```<rid>``` is the runtime identifier.
+For possible RIDs see [Using RID](https://learn.microsoft.com/en-us/dotnet/core/rid-catalog#using-rids).
 
 The generation of the API project needs 3 calls of the application with different parameters:
 
@@ -42,6 +43,13 @@ Example: ```ApiGenerator notification -i .\notificationSchema.json -t -t D:\MyPr
 
 This will read the notification definitions and gerenate the SDK files in the target folder.
 
+The generator will create some files in the current directory:
+- publicapi-v2-latest.json: The swagger file downloaded from Genesys.
+- apis.json: The definition of the api calls parsed from swagger file.
+- models.json: The definition of the data models parsed from the swagger file.
+- notificationSchema.json: The definitons of the topic data read from Genesys (step 2, see avove)
+- notifications.json: The notification data parsed from the topic data.
+
 To generate the SDK run ```dotnet build -c Release``` from target folder.
 
 ## Usage
@@ -54,7 +62,7 @@ To use the api in a simple console app:
 3. Create an instance of the API you want to use.
 4. Use the api.
  
-> **_Attention:_**  You should not have credential values in your code. This is for demonstartion only. In your application read it from a secure place (e.g. KeyVault).
+> **_Attention:_**  You should not have credential values in your code. This is for demonstration only. In your application read it from a secure place (e.g. KeyVault).
 
 Example:
 ```csharp
@@ -140,6 +148,6 @@ This open a websocket connection to receive the notifications.
 
 Use ```AddTopics``` to add additional topics to the subscription. Use ```SetTopics``` to replace the list of topics in the subscription with a new one.
 
-Call ```channel.DeleteTopics() or ```notifications.RemoveChannel``` to stop the receive of notifications and stop the underlying websocket.
+Call ```channel.DeleteTopics()``` or ```notifications.RemoveChannel``` to stop the receive of notifications and stop the underlying websocket.
 
-To find the available topics and the corresponding NotificationEvent classes have a look at ```NotificationChannelTopicMap.cs```.
+To find the available topics and the corresponding ```NotificationEvent``` classes have a look at ```NotificationChannelTopicMap.cs```.
