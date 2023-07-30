@@ -5,13 +5,28 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.8.1</Version>
+    <Version>0.8.2</Version>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="ApiException.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <Content Remove="ApiException.txt" />
+    <Content Remove="AuthTokenInfo.txt" />
+    <Content Remove="ConnectionManager.txt" />
+    <Content Remove="DateTimeInterval.txt" />
+    <Content Remove="GenesysCloudCredentials.txt" />
+    <Content Remove="JsonEnumMemberStringEnumConverter.txt" />
+    <Content Remove="Project.txt" />
+    <Content Remove="NotificationChannel.txt" />
+    <Content Remove="NotificationData.txt" />
+    <Content Remove="NotificationEvent.txt" />
+    <Content Remove="NotificationMetadata.txt" />
+    <Content Remove="Notifications.txt" />
+    <Content Remove="TopicTypeInfo.txt" />
+  </ItemGroup>
+<!--  <ItemGroup>
+    <None Update="ApiException.txt"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </None>
     <None Update="AuthTokenInfo.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -27,6 +42,10 @@
     <None Update="JsonEnumMemberStringEnumConverter.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Project.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+
     <None Update="NotificationChannel.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -42,12 +61,24 @@
     <None Update="Notifications.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Project.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="TopicTypeInfo.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>-->
+  <ItemGroup>
+    <EmbeddedResource Include="ApiException.txt" />
+    <EmbeddedResource Include="AuthTokenInfo.txt" />
+    <EmbeddedResource Include="ConnectionManager.txt" />
+    <EmbeddedResource Include="DateTimeInterval.txt" />
+    <EmbeddedResource Include="GenesysCloudCredentials.txt" />
+    <EmbeddedResource Include="JsonEnumMemberStringEnumConverter.txt" />
+    <EmbeddedResource Include="Project.txt" />
+    <EmbeddedResource Include="NotificationChannel.txt" />
+    <EmbeddedResource Include="NotificationData.txt" />
+    <EmbeddedResource Include="NotificationEvent.txt" />
+    <EmbeddedResource Include="NotificationMetadata.txt" />
+    <EmbeddedResource Include="Notifications.txt" />
+    <EmbeddedResource Include="TopicTypeInfo.txt" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
