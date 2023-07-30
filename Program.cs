@@ -7,7 +7,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.Extensions;
 
 string swaggerfile = "publicapi-v2-latest.json";
-//string targetNamespace = "GenesysCloud.Client.V2";
+var appDirectory = AppContext.BaseDirectory;
 
 CommandLine.Parser.Default.ParseArguments<SwaggerOptions, ReadNotificationOptions, NotificationOptions>(args)
     .MapResult(
@@ -38,16 +38,16 @@ int RunSwagger(SwaggerOptions opts) {
         Console.WriteLine("Missing target namespace");
         return 1;
     }
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "ApiException.cs"), File.ReadAllText("ApiException.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "AuthTokenInfo.cs"), File.ReadAllText("AuthTokenInfo.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "ConnectionManager.cs"), File.ReadAllText("ConnectionManager.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "DateTimeInterval.cs"), File.ReadAllText("DateTimeInterval.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "GenesysCloudCredentials.cs"), File.ReadAllText("GenesysCloudCredentials.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "JsonEnumMemberStringEnumConverter.cs"), File.ReadAllText("JsonEnumMemberStringEnumConverter.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "ApiException.cs"), File.ReadAllText(Path.Combine(appDirectory,"ApiException.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "AuthTokenInfo.cs"), File.ReadAllText(Path.Combine(appDirectory, "AuthTokenInfo.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "ConnectionManager.cs"), File.ReadAllText(Path.Combine(appDirectory, "ConnectionManager.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "DateTimeInterval.cs"), File.ReadAllText(Path.Combine(appDirectory, "DateTimeInterval.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "GenesysCloudCredentials.cs"), File.ReadAllText(Path.Combine(appDirectory, "GenesysCloudCredentials.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "JsonEnumMemberStringEnumConverter.cs"), File.ReadAllText(Path.Combine(appDirectory, "JsonEnumMemberStringEnumConverter.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
 
 
     if (!File.Exists(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"))) {
-        File.WriteAllText(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), File.ReadAllText("Project.txt"));
+        File.WriteAllText(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), File.ReadAllText(Path.Combine(appDirectory, "Project.txt")));
     }
 
     try {
@@ -132,12 +132,12 @@ int RunNotification(NotificationOptions opts) {
     apiGenerator.CreateNotificationDefinitions();
     apiGenerator.WriteDefinitionsJson();
     apiGenerator.WriteNotificationDefinitions();
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationChannel.cs"), File.ReadAllText("NotificationChannel.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationData.cs"), File.ReadAllText("NotificationData.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationEvent.cs"), File.ReadAllText("NotificationEvent.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationMetadata.cs"), File.ReadAllText("NotificationMetadata.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "Notifications.cs"), File.ReadAllText("Notifications.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
-    File.WriteAllText(Path.Combine(opts.TargetFolder, "TopicTypeInfo.cs"), File.ReadAllText("TopicTypeInfo.txt").Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationChannel.cs"), File.ReadAllText(Path.Combine(appDirectory, "NotificationChannel.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationData.cs"), File.ReadAllText(Path.Combine(appDirectory, "NotificationData.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationEvent.cs"), File.ReadAllText(Path.Combine(appDirectory, "NotificationEvent.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationMetadata.cs"), File.ReadAllText(Path.Combine(appDirectory, "NotificationMetadata.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "Notifications.cs"), File.ReadAllText(Path.Combine(appDirectory, "Notifications.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
+    File.WriteAllText(Path.Combine(opts.TargetFolder, "TopicTypeInfo.cs"), File.ReadAllText(Path.Combine(appDirectory, "TopicTypeInfo.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
 
     return 0;
 }
