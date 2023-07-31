@@ -44,12 +44,12 @@ int RunSwagger(SwaggerOptions opts) {
         Console.WriteLine("Missing target namespace");
         return 1;
     }
-    CreateCodeFile("ApiGenerator.ApiException.txt", Path.Combine(opts.TargetFolder, "ApiException.cs"));
-    CreateCodeFile("ApiGenerator.AuthTokenInfo.txt", Path.Combine(opts.TargetFolder, "AuthTokenInfo.cs"));
-    CreateCodeFile("ApiGenerator.ConnectionManager.txt", Path.Combine(opts.TargetFolder, "ConnectionManager.cs"));
-    CreateCodeFile("ApiGenerator.DateTimeInterval.txt", Path.Combine(opts.TargetFolder, "DateTimeInterval.cs"));
-    CreateCodeFile("ApiGenerator.GenesysCloudCredentials.txt", Path.Combine(opts.TargetFolder, "GenesysCloudCredentials.cs"));
-    CreateCodeFile("ApiGenerator.JsonEnumMemberStringEnumConverter.txt", Path.Combine(opts.TargetFolder, "JsonEnumMemberStringEnumConverter.cs"));
+    CreateCodeFile("ApiGenerator.ApiException.txt", Path.Combine(opts.TargetFolder, "ApiException.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.AuthTokenInfo.txt", Path.Combine(opts.TargetFolder, "AuthTokenInfo.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.ConnectionManager.txt", Path.Combine(opts.TargetFolder, "ConnectionManager.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.DateTimeInterval.txt", Path.Combine(opts.TargetFolder, "DateTimeInterval.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.GenesysCloudCredentials.txt", Path.Combine(opts.TargetFolder, "GenesysCloudCredentials.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.JsonEnumMemberStringEnumConverter.txt", Path.Combine(opts.TargetFolder, "JsonEnumMemberStringEnumConverter.cs"), opts.TargetNamespace);
 
     //File.WriteAllText(Path.Combine(opts.TargetFolder, "ApiException.cs"), File.ReadAllText(Path.Combine(appDirectory,"ApiException.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
     //File.WriteAllText(Path.Combine(opts.TargetFolder, "AuthTokenInfo.cs"), File.ReadAllText(Path.Combine(appDirectory, "AuthTokenInfo.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
@@ -60,7 +60,7 @@ int RunSwagger(SwaggerOptions opts) {
 
 
     if (!File.Exists(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"))) {
-        CreateCodeFile("ApiGenerator.Project.txt", Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"));
+        CreateCodeFile("ApiGenerator.Project.txt", Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), opts.TargetNamespace);
 
         //File.WriteAllText(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), File.ReadAllText(Path.Combine(appDirectory, "Project.txt")));
     }
@@ -81,7 +81,7 @@ int RunSwagger(SwaggerOptions opts) {
     return 0;
 }
 
-void CreateCodeFile(string resourceName, string fileName) {
+void CreateCodeFile(string resourceName, string fileName, string targetNamespace) {
     if (assembly == null) {
         return;
     }
@@ -91,7 +91,7 @@ void CreateCodeFile(string resourceName, string fileName) {
         return;
     }
     using (var reader = new StreamReader(resourceStream, Encoding.UTF8)) {
-        File.WriteAllText(fileName, reader.ReadToEnd());
+        File.WriteAllText(fileName, reader.ReadToEnd().Replace("{TargetNamespace}", targetNamespace));
     }
 }
 
@@ -160,12 +160,12 @@ int RunNotification(NotificationOptions opts) {
     apiGenerator.CreateNotificationDefinitions();
     apiGenerator.WriteDefinitionsJson();
     apiGenerator.WriteNotificationDefinitions();
-    CreateCodeFile("ApiGenerator.NotificationChannel.txt", Path.Combine(opts.TargetFolder, "NotificationChannel.cs"));
-    CreateCodeFile("ApiGenerator.NotificationData.txt", Path.Combine(opts.TargetFolder, "NotificationData.cs"));
-    CreateCodeFile("ApiGenerator.NotificationEvent.txt", Path.Combine(opts.TargetFolder, "NotificationEvent.cs"));
-    CreateCodeFile("ApiGenerator.NotificationMetadata.txt", Path.Combine(opts.TargetFolder, "NotificationMetadata.cs"));
-    CreateCodeFile("ApiGenerator.Notifications.txt", Path.Combine(opts.TargetFolder, "Notifications.cs"));
-    CreateCodeFile("ApiGenerator.TopicTypeInfo.txt", Path.Combine(opts.TargetFolder, "TopicTypeInfo.cs"));
+    CreateCodeFile("ApiGenerator.NotificationChannel.txt", Path.Combine(opts.TargetFolder, "NotificationChannel.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.NotificationData.txt", Path.Combine(opts.TargetFolder, "NotificationData.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.NotificationEvent.txt", Path.Combine(opts.TargetFolder, "NotificationEvent.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.NotificationMetadata.txt", Path.Combine(opts.TargetFolder, "NotificationMetadata.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.Notifications.txt", Path.Combine(opts.TargetFolder, "Notifications.cs"), opts.TargetNamespace);
+    CreateCodeFile("ApiGenerator.TopicTypeInfo.txt", Path.Combine(opts.TargetFolder, "TopicTypeInfo.cs"), opts.TargetNamespace);
 
     //File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationChannel.cs"), File.ReadAllText(Path.Combine(appDirectory, "NotificationChannel.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
     //File.WriteAllText(Path.Combine(opts.TargetFolder, "NotificationData.cs"), File.ReadAllText(Path.Combine(appDirectory, "NotificationData.txt")).Replace("{TargetNamespace}", opts.TargetNamespace));
