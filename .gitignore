@@ -396,3 +396,9 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+apis.json
+models.json
+notifications.json
+notificationSchema.json
+publicapi-v2-latest.json
