@@ -183,7 +183,7 @@ namespace GenesysCloud.Client.V2 {
                 using (var socket = new ClientWebSocket()) {
                     try {
                         await socket.ConnectAsync(_channel.ConnectUri, cancellationToken);
-                        _logger.LogInformation("Websocket connected");
+                        _logger.LogInformation("Websocket for channel {channelId} connected", _channel.Id);
                         await Receive(socket, cancellationToken);
                     }
                     catch (System.Threading.Tasks.TaskCanceledException) {
@@ -193,7 +193,7 @@ namespace GenesysCloud.Client.V2 {
                         _logger.LogError(ex, "ERROR: ");
                     }
                 }
-                _logger.LogInformation("ClientWebSocket disposed");
+                _logger.LogInformation("ClientWebSocket for channel {channelId} disposed", _channel.Id);
             };
         }
         private async Task Receive(ClientWebSocket socket, CancellationToken cancellationToken) {
