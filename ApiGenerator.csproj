@@ -1,13 +1,24 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.8.2</Version>
+    <Version>1.0.0.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>false</SelfContained>
+    <SelfContained>true</SelfContained>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>GC-ApiGenerator</ToolCommandName>
+    <PackageOutputPath>./nupkg</PackageOutputPath>
+    <Title>GC Api Generator</Title>
+    <Authors>HGSandhagen</Authors>
+    <Company>HGSandhagen</Company>
+    <Description>This is an experimental application to genereate a C# library to access Genesys Cloud API.</Description>
+    <PackageReadmeFile>Readme.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/HGSandhagen/Genesys-ApiGenerator</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/HGSandhagen/Genesys-ApiGenerator</RepositoryUrl>
+    <PackageTags>Genesys, Api</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,46 +36,6 @@
     <Content Remove="Notifications.txt" />
     <Content Remove="TopicTypeInfo.txt" />
   </ItemGroup>
-<!--  <ItemGroup>
-    <None Update="ApiException.txt"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </None>
-    <None Update="AuthTokenInfo.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="ConnectionManager.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="DateTimeInterval.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="GenesysCloudCredentials.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="JsonEnumMemberStringEnumConverter.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Project.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-
-    <None Update="NotificationChannel.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NotificationData.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NotificationEvent.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NotificationMetadata.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Notifications.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="TopicTypeInfo.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>-->
   <ItemGroup>
     <EmbeddedResource Include="ApiException.txt" />
     <EmbeddedResource Include="AuthTokenInfo.txt" />
@@ -83,5 +54,14 @@
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Extensions" Version="2.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Readme.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Properties\" />
   </ItemGroup>
 </Project>

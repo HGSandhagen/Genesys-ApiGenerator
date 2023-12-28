@@ -15,38 +15,44 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 
 namespace ApiGenerator {
-    internal class ApiGenerator {
-        private readonly string _namespace;
-        private readonly string _targetFolder;
+    internal partial class ApiGenerator {
+        //private readonly string _namespace;
+        //private readonly string _targetFolder;
         private readonly ApiDefaults _apiDefaults = new();
-        private readonly Dictionary<string, List<SwaggerOperation>> _swaggerapis = new();
-        private readonly List<SwaggerDefinition> _swaggerDefinitions = new ();
-        private readonly Dictionary<string,NotificationSwaggerDefinition> _swaggernotification = new ();
-        private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = new();
+        private readonly Dictionary<string, List<SwaggerOperation>> _swaggerapis = [];
+        private readonly List<SwaggerDefinition> _swaggerDefinitions = [];
+        private SwaggerResponse[] _swaggerResponses = [];
+        private readonly Dictionary<string, NotificationSwaggerDefinition> _swaggernotification = [];
+        private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = [];
         private string? _swagger;
+        private string? _basePath;
         private string? _host;
         private ApiInfo? _info;
-        private readonly List<DefinitionModel> _models = new();
-        private readonly List<DefinitionModel> _notificationModels = new();
-        private readonly Dictionary<string, List<ApiOperation>> _apis = new();
 
-        public ApiGenerator(string targetNamespace, string targetFolder) {
-            _namespace = targetNamespace;
-            if (!Directory.Exists(targetFolder)) {
-                Directory.CreateDirectory(targetFolder);
-            }
-            _targetFolder = targetFolder;
+        private readonly List<DefinitionModel> _models = [];
+        private readonly List<DefinitionModel> _notificationModels = [];
+        private readonly Dictionary<string, List<ApiOperation>> _apis = [];
+        [GeneratedRegex(@"\.([a-z0-9]*)\.(\{id\})")]
+        private static partial Regex NotificationRegex();
+
+        public ApiGenerator() {
+            //_namespace = targetNamespace;
+            //if (!Directory.Exists(targetFolder)) {
+            //    Directory.CreateDirectory(targetFolder);
+            //}
+            //_targetFolder = targetFolder;
         }
         public ApiDefaults ApiDefaults { get => _apiDefaults; }
-        public void WriteDefinitionsJson() {
-            if (_models.Any()) {
-                File.WriteAllText("models.json", JsonSerializer.Serialize(_models, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
+        public void WriteDefinitionsJson(string build) {
+            JsonSerializerOptions jsonOptions = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true };
+            if (_models.Count != 0) {
+                File.WriteAllText($"models-{build}.json", JsonSerializer.Serialize(_models, jsonOptions));
             }
-            if (_apis.Any()) {
-                File.WriteAllText("apis.json", JsonSerializer.Serialize(_apis, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
+            if (_apis.Count != 0) {
+                File.WriteAllText($"apis-{build}.json", JsonSerializer.Serialize(_apis, jsonOptions));
             }
-            if (_notificationModels.Any()) {
-                File.WriteAllText("notifications.json", JsonSerializer.Serialize(_notificationModels, new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = true }));
+            if (_notificationModels.Count != 0) {
+                File.WriteAllText($"notifications-{build}.json", JsonSerializer.Serialize(_notificationModels, jsonOptions));
             }
         }
 
@@ -68,11 +74,70 @@ namespace ApiGenerator {
             if (root is JsonObject) {
                 foreach (var o in root.AsObject()) {
                     switch (o.Key) {
+                        case "swagger":
+                            // TODO: Check swagger version
+                            _swagger = o.Value?.ToString();
+                            break;
+                        case "info":
+                            if (o.Value is JsonObject object1) {
+                                _info = new ApiInfo(object1);
+                            }
+                            break;
+                        case "host":
+                            _host = o.Value?.ToString();
+                            break;
+                        case "basePath":
+                            _basePath = o.Value?.ToString();
+                            break;
+                        case "schemes":
+                            if (o.Value is JsonArray) {
+                                List<string> l = [];
+                                foreach (var item in o.Value.AsArray()) {
+                                    if (item != null) {
+                                        l.Add(item.ToString());
+                                    }
+                                }
+                                _apiDefaults.Schemes = [.. l];
+                            }
+                            else {
+                                throw new Exception("Schemes must be a JsonArray");
+                            }
+                            break;
+                        case "consumes":
+                            if (o.Value is JsonArray) {
+                                List<string> l = [];
+                                foreach (var item in o.Value.AsArray()) {
+                                    if (item != null) {
+                                        l.Add(item.ToString());
+                                    }
+                                }
+                                _apiDefaults.Consumes = [.. l];
+                            }
+                            else {
+                                throw new Exception("Consumes must be a JsonArray");
+                            }
+
+                            break;
+                        case "produces":
+                            if (o.Value is JsonArray) {
+                                List<string> l = [];
+                                foreach (var item in o.Value.AsArray()) {
+                                    if (item != null) {
+                                        l.Add(item.ToString());
+                                    }
+                                }
+                                _apiDefaults.Produces = [.. l];
+                            }
+                            else {
+                                throw new Exception("Produces must be a JsonArray");
+                            }
+
+                            break;
                         case "paths":
                             if (o.Value is JsonObject) {
                                 foreach (var p in o.Value.AsObject()) {
                                     if (p.Value != null && p.Value is JsonObject) {
-                                        if (p.Key.StartsWith("/")) {
+                                        if (p.Key.StartsWith('/')) {
                                             ParseSwaggerOperation(p.Key, p.Value.AsObject());
                                             //var api = new SwaggerApi(p.Key, p.Value.AsObject());
                                             //_swaggerApis.Add(api);
@@ -106,100 +171,60 @@ namespace ApiGenerator {
                                 throw new Exception("definition as Array???");
                             }
                             break;
-                        case "swagger":
-                            // TODO: Check swagger version
-                            _swagger = o.Value?.ToString();
-                            break;
-                        case "info":
-                            if (o.Value is JsonObject object1) {
-                                _info = new ApiInfo(object1);
+                        case "parameters":
+                            // TODO: default definiton parameters
+                            throw new NotImplementedException("Parameters are not implemented yet");
+                            //break;
+                       case "responses":
+                            if (o.Value is JsonObject) {
+                                List<SwaggerResponse> l = [];
+                                foreach (var r in o.Value.AsObject()) {
+                                    if (r.Value is JsonObject responsesObject)
+                                        l.Add(new SwaggerResponse(r.Key, responsesObject));
+                                }
+                                _swaggerResponses = [.. l];
+                            }
+                            else {
+                                throw new Exception("Responses must be a JsonObject");
                             }
                             break;
-                        case "host":
-                            _host = o.Value?.ToString();
+                        case "securityDefinitions":
+                            if (o.Value is JsonObject) {
+                                List<SecurityScheme> l = [];
+                                foreach (var item in o.Value.AsObject()) {
+                                    if (item.Value is JsonObject object2) {
+                                        l.Add(ParseSecuritySchemeObject(item.Key, object2));
+                                    }
+                                }
+                                _apiDefaults.SecuritySchemes = [.. l];
+                            }
+                            else {
+                                throw new Exception("SecuritySchemes must be a JsonArray");
+                            }
                             break;
+                        case "security":
+                            // TODO: security object
+                            throw new NotImplementedException("Security are not implemented yet");
                         case "tags":
                             if (o.Value is JsonArray) {
-                                List<TagDescription> l = new();
+                                List<TagDescription> l = [];
                                 foreach (var item in o.Value.AsArray()) {
                                     if (item is JsonObject) {
                                         l.Add(ParseTag(item.AsObject()));
                                     }
                                 }
-                                _apiDefaults.Tags = l.ToArray();
+                                _apiDefaults.Tags = [.. l];
                             }
                             else {
                                 throw new Exception("Tags must be a JsonArray");
                             }
-                            break;
-                        case "schemes":
-                            if (o.Value is JsonArray) {
-                                List<string> l = new();
-                                foreach (var item in o.Value.AsArray()) {
-                                    if (item != null) {
-                                        l.Add(item.ToString());
-                                    }
-                                }
-                                _apiDefaults.Schemes = l.ToArray();
-                            }
-                            else {
-                                throw new Exception("Tags must be a JsonArray");
-                            }
-
-                            break;
-                        case "consumes":
-                            if (o.Value is JsonArray) {
-                                List<string> l = new();
-                                foreach (var item in o.Value.AsArray()) {
-                                    if (item != null) {
-                                        l.Add(item.ToString());
-                                    }
-                                }
-                                _apiDefaults.Consumes = l.ToArray();
-                            }
-                            else {
-                                throw new Exception("Tags must be a JsonArray");
-                            }
-
-                            break;
-                        case "produces":
-                            if (o.Value is JsonArray) {
-                                List<string> l = new();
-                                foreach (var item in o.Value.AsArray()) {
-                                    if (item != null) {
-                                        l.Add(item.ToString());
-                                    }
-                                }
-                                _apiDefaults.Produces = l.ToArray();
-                            }
-                            else {
-                                throw new Exception("Tags must be a JsonArray");
-                            }
-
-                            break;
-                        case "securityDefinitions":
-                            if (o.Value is JsonObject) {
-                                List<SecurityScheme> l = new();
-                                foreach (var item in o.Value.AsObject()) {
-                                    if (item.Value is JsonObject object2) {
-                                        l.Add(ParseSecurityObject(item.Key, object2));
-                                    }
-                                }
-                                _apiDefaults.SecuritySchemes = l.ToArray();
-                            }
-                            else {
-                                throw new Exception("Tags must be a JsonArray");
-                            }
-                            break;
-                        case "responses":
-                            // TODO: default responses
                             break;
                         case "externalDocs":
                             if (o.Value is JsonObject @object) {
                                 _apiDefaults.ExternalDocs = ParseExternalDocs(@object);
                             }
                             else {
-                                throw new Exception("Tags must be a JsonArray");
+                                throw new Exception("ExternalDocs must be a JsonArray");
                             }
                             break;
                         default:
@@ -209,19 +234,20 @@ namespace ApiGenerator {
                 }
             }
         }
+
         private void ParseSwaggerOperation(string path, JsonObject o) {
             foreach (var item in o) {
                 switch (item.Key) {
                     case "get":
-                        if (item.Value is JsonObject) {
-                            var op = new SwaggerOperation(path, "Get", (JsonObject)item.Value);
-                            if (op.Tags?.Any() == true) {
+                        if (item.Value is JsonObject getObject) {
+                            var op = new SwaggerOperation(path, "Get", getObject);
+                            if (op.Tags?.Length > 0) {
                                 foreach (var t in op.Tags) {
-                                    if (_swaggerapis.ContainsKey(t)) {
-                                        _swaggerapis[t].Add(op);
+                                    if (_swaggerapis.TryGetValue(t, out List<SwaggerOperation>? value)) {
+                                        value.Add(op);
                                     }
                                     else {
-                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                        _swaggerapis.Add(t, [op]);
                                     }
                                 }
                             }
@@ -235,15 +261,15 @@ namespace ApiGenerator {
                         }
                         break;
                     case "post":
-                        if (item.Value is JsonObject) {
-                            var op = new SwaggerOperation(path, "Post", (JsonObject)item.Value);
-                            if (op.Tags?.Any() == true) {
+                        if (item.Value is JsonObject postObject) {
+                            var op = new SwaggerOperation(path, "Post", postObject);
+                            if (op.Tags?.Length > 0) {
                                 foreach (var t in op.Tags) {
-                                    if (_swaggerapis.ContainsKey(t)) {
-                                        _swaggerapis[t].Add(op);
+                                    if (_swaggerapis.TryGetValue(t, out List<SwaggerOperation>? value)) {
+                                        value.Add(op);
                                     }
                                     else {
-                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                        _swaggerapis.Add(t, [op]);
                                     }
                                 }
                             }
@@ -257,15 +283,15 @@ namespace ApiGenerator {
                         }
                         break;
                     case "put":
-                        if (item.Value is JsonObject) {
-                            var op = new SwaggerOperation(path, "Put", (JsonObject)item.Value);
-                            if (op.Tags?.Any() == true) {
+                        if (item.Value is JsonObject putObject) {
+                            var op = new SwaggerOperation(path, "Put", putObject);
+                            if (op.Tags?.Length > 0) {
                                 foreach (var t in op.Tags) {
-                                    if (_swaggerapis.ContainsKey(t)) {
-                                        _swaggerapis[t].Add(op);
+                                    if (_swaggerapis.TryGetValue(t, out List<SwaggerOperation>? value)) {
+                                        value.Add(op);
                                     }
                                     else {
-                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                        _swaggerapis.Add(t, [op]);
                                     }
                                 }
                             }
@@ -279,15 +305,15 @@ namespace ApiGenerator {
                         }
                         break;
                     case "patch":
-                        if (item.Value is JsonObject) {
-                            var op = new SwaggerOperation(path, "Patch", (JsonObject)item.Value);
-                            if (op.Tags?.Any() == true) {
+                        if (item.Value is JsonObject patchObject) {
+                            var op = new SwaggerOperation(path, "Patch", patchObject);
+                            if (op.Tags?.Length > 0) {
                                 foreach (var t in op.Tags) {
-                                    if (_swaggerapis.ContainsKey(t)) {
-                                        _swaggerapis[t].Add(op);
+                                    if (_swaggerapis.TryGetValue(t, out List<SwaggerOperation>? value)) {
+                                        value.Add(op);
                                     }
                                     else {
-                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                        _swaggerapis.Add(t, [op]);
                                     }
                                 }
                             }
@@ -301,15 +327,15 @@ namespace ApiGenerator {
                         }
                         break;
                     case "delete":
-                        if (item.Value is JsonObject) {
-                            var op = new SwaggerOperation(path, "Delete", (JsonObject)item.Value);
-                            if (op.Tags?.Any() == true) {
+                        if (item.Value is JsonObject deleteObject) {
+                            var op = new SwaggerOperation(path, "Delete", deleteObject);
+                            if (op.Tags?.Length > 0) {
                                 foreach (var t in op.Tags) {
-                                    if (_swaggerapis.ContainsKey(t)) {
-                                        _swaggerapis[t].Add(op);
+                                    if (_swaggerapis.TryGetValue(t, out List<SwaggerOperation>? value)) {
+                                        value.Add(op);
                                     }
                                     else {
-                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                        _swaggerapis.Add(t, [op]);
                                     }
                                 }
                             }
@@ -323,15 +349,15 @@ namespace ApiGenerator {
                         }
                         break;
                     case "head":
-                        if (item.Value is JsonObject) {
-                            var op = new SwaggerOperation(path, "Head", (JsonObject)item.Value);
-                            if (op.Tags?.Any() == true) {
+                        if (item.Value is JsonObject headObject) {
+                            var op = new SwaggerOperation(path, "Head", headObject);
+                            if (op.Tags?.Length > 0) {
                                 foreach (var t in op.Tags) {
-                                    if (_swaggerapis.ContainsKey(t)) {
-                                        _swaggerapis[t].Add(op);
+                                    if (_swaggerapis.TryGetValue(t, out List<SwaggerOperation>? value)) {
+                                        value.Add(op);
                                     }
                                     else {
-                                        _swaggerapis.Add(t, new List<SwaggerOperation>() { op });
+                                        _swaggerapis.Add(t, [op]);
                                     }
                                 }
                             }
@@ -344,12 +370,155 @@ namespace ApiGenerator {
                             throw new Exception("Operation must be a JsonObject");
                         }
                         break;
+                    case "$ref":
+                        // TODO: path.$ref
+                        throw new NotImplementedException("$ref in path object not implemented yet");
                     default:
                         Console.WriteLine(item.Key);
                         break;
                 }
             }
         }
+        private static SecurityScheme ParseSecuritySchemeObject(string key, JsonObject value) {
+            string? schemeType = null;
+            string? description = null;
+            string? parameterName = null;
+            string? in_ = null;
+            string? flow = null;
+            string? authorizationUrl = null;
+            string? tokenUrl = null;
+            IEnumerable<Scope>? scopes = null;
+            foreach (var item in value.AsObject()) {
+                switch (item.Key) {
+                    case "type":
+                        schemeType = item.Value?.ToString();
+                        break;
+                    case "description":
+                        description = item.Value?.ToString();
+                        break;
+                    case "name":
+                        parameterName = item.Value?.ToString();
+                        break;
+                    case "in":
+                        in_ = item.Value?.ToString();
+                        break;
+                    case "flow":
+                        flow = item.Value?.ToString();
+                        break;
+                    case "authorizationUrl":
+                        authorizationUrl = item.Value?.ToString();
+                        break;
+                    case "tokenUrl":
+                        tokenUrl = item.Value?.ToString();
+                        break;
+                    case "scopes":
+                        if (item.Value is JsonObject) {
+                            scopes = ParseScopes(item.Value.AsObject());
+                        }
+                        else {
+                            throw new Exception("Security scopes must be a JsonObject");
+                        }
+                        break;
+                    default:
+                        throw new Exception($"Unknown {item.Key} paramter in security scheme");
+                }
+            }
+            switch (schemeType) {
+                case "basic":
+                    return new BasicSecurityScheme(key) { Description = description };
+                case "apiKey":
+                    if (string.IsNullOrEmpty(parameterName)) {
+                        throw new Exception("Missing name in SecurityScheme");
+                    }
+                    if (string.IsNullOrEmpty(in_)) {
+                        throw new Exception("Missing \"in\" in SecurityScheme");
+                    }
+                    return new ApiKeySecurityScheme(parameterName, in_, key);
+                case "oauth2":
+                    if (string.IsNullOrEmpty(flow)) {
+                        throw new Exception("Missing flow in SecurityScheme");
+                    }
+                    if (string.IsNullOrEmpty(authorizationUrl)) {
+                        throw new Exception("Missing authorizationUrl in SecurityScheme");
+                    }
+                    if (string.IsNullOrEmpty(tokenUrl)) {
+                        if (flow != "implicit") {
+                            throw new Exception("Missing tokenUrl in SecurityScheme");
+                        }
+                    }
+                    if (scopes == null) {
+                        throw new Exception("Missing scopes in SecurityScheme");
+                    }
+                    return new OAuth2SecurityScheme(flow, authorizationUrl, tokenUrl, scopes, key);
+                default:
+                    throw new Exception("Unknown security scheme type " + schemeType);
+            }
+        }
+        private static List<Scope> ParseScopes(JsonObject scopes) {
+            List<Scope> scopesList = [];
+            foreach (var item in scopes.AsObject()) {
+                if (item.Value == null) {
+                    throw new Exception("Description of scope must not be empty");
+                }
+                scopesList.Add(new Scope(item.Key, item.Value.ToString()));
+            }
+            return scopesList;
+        }
+        private static TagDescription ParseTag(JsonObject tag) {
+            string? name = null;
+            string? description = null;
+            Documentation? externalDocs = null;
+            foreach (var item in tag.AsObject()) {
+                switch (item.Key) {
+                    case "name":
+                        name = item.Value?.ToString();
+                        break;
+                    case "description":
+                        description = item.Value?.ToString();
+                        break;
+                    case "externalDocs":
+                        if (item.Value is JsonObject) {
+                            externalDocs = ParseExternalDocs(item.Value.AsObject());
+                        }
+                        else {
+                            throw new Exception("ExternalDos must be an JsonObject");
+                        }
+                        break;
+                    default:
+                        throw new Exception("Unknown element " + item.Key + " in tags.");
+                }
+            }
+            if (string.IsNullOrEmpty(name)) {
+                throw new Exception("Name of tag must not be empty");
+            }
+            return new TagDescription(name) {
+                Description = description,
+                ExternalDocumentation = externalDocs
+            };
+        }
+        private static Documentation ParseExternalDocs(JsonObject externalDocs) {
+            string? url = null;
+            string? description = null;
+            foreach (var item in externalDocs.AsObject()) {
+                switch (item.Key) {
+                    case "url":
+                        url = item.Value?.ToString();
+                        break;
+                    case "description":
+                        description = item.Value?.ToString();
+                        break;
+                    default:
+                        throw new Exception("Unknown element " + item.Key + " in externalDocs.");
+                }
+            }
+            if (string.IsNullOrEmpty(url)) {
+                throw new Exception("Url of tag must not be empty");
+            }
+            return new Documentation(url) {
+                Description = description
+            };
+        }
+
         public void ParseNotificationSwagger(string notificationFile) {
             if (!File.Exists(notificationFile)) {
                 throw new ArgumentException("Could not find file \"" + notificationFile + "\"");
@@ -406,12 +575,12 @@ namespace ApiGenerator {
                 //    Console.WriteLine();
                 //}
                 var nd = ParseNotificationSwaggerDefinition((JsonObject)o.Schema);
-                var match = Regex.Matches(o.Id, @"\.([a-z0-9]*)\.(\{id\})");
+                var match = NotificationRegex().Matches(o.Id);
                 string[]? topicParameters = null;
-                if (match.Any()) {
+                if (match.Count != 0) {
                     var list = match.Select(p => {
                         var x = p.Groups[1].Value;
-                        if (x.EndsWith("s")) {
+                        if (x.EndsWith('s')) {
                             x = x.Substring(0, x.Length - 1);
                         }
                         return string.Concat(x[..1].ToUpper(), x.AsSpan(1), "Id");
@@ -430,7 +599,7 @@ namespace ApiGenerator {
             string? id = null;
             string? name = null;
             string? type = null;
-            List<NotificationProperty> properties = new();
+            List<NotificationProperty> properties = [];
             string[]? required = null;
             string? description = null;
             foreach (var item in o) {
@@ -458,7 +627,7 @@ namespace ApiGenerator {
                                     list.Add(prop.ToString());
                                 }
                             }
-                            required = list.ToArray();
+                            required = [.. list];
                         }
                         break;
                     case "description":
@@ -477,7 +646,7 @@ namespace ApiGenerator {
                 throw new Exception("No id found for notification.");
             }
             //Console.WriteLine("Parse " + id);
-            return new NotificationSwaggerDefinition(id, type, properties.ToArray(), required, description);
+            return new NotificationSwaggerDefinition(id, type, [.. properties], required, description);
 
         }
         NotificationProperty ParseNotificationProperty(string? name_, JsonObject value) {
@@ -531,7 +700,7 @@ namespace ApiGenerator {
                                     list.Add(prop.ToString());
                                 }
                             }
-                            genesysSearchFields = list.ToArray();
+                            genesysSearchFields = [.. list];
                         }
                         break;
                     case "minimum":
@@ -556,14 +725,14 @@ namespace ApiGenerator {
                         position = item.Value?.GetValue<int>();
                         break;
                     case "properties":
-                        List<NotificationProperty> l = new();
+                        List<NotificationProperty> l = [];
                         if(item.Value is JsonObject) {
                             foreach (var p in item.Value.AsObject()) {
                                 if (p.Value is JsonObject) {
                                     l.Add(ParseNotificationProperty(p.Key, p.Value.AsObject()));
                                 }
                             }
-                            properties = l.ToArray();
+                            properties = [.. l];
                         }
                         break;
                     // Handled in SwaggerBase
@@ -647,7 +816,7 @@ namespace ApiGenerator {
                                     list.Add(prop.ToString());
                                 }
                             }
-                            enumValues = list.ToArray();
+                            enumValues = [.. list];
                         }
                         break;
                     case "format":
@@ -685,13 +854,13 @@ namespace ApiGenerator {
                         break;
                     case "properties":
                         if (item.Value != null) {
-                            List<NotificationProperty> l = new();
+                            List<NotificationProperty> l = [];
                             foreach (var prop in item.Value.AsObject()) {
                                 if (prop.Value != null) {
                                     l.Add(ParseNotificationProperty(prop.Key, prop.Value.AsObject()));
                                 }
                             }
-                            properties = l.ToArray();
+                            properties = [.. l];
                         }
                         break;
                     // Handled in NotificationBase
@@ -762,13 +931,13 @@ namespace ApiGenerator {
                         break;
                     case "properties":
                         if (item.Value != null) {
-                            List<NotificationProperty> l = new();
+                            List<NotificationProperty> l = [];
                             foreach (var prop in item.Value.AsObject()) {
                                 if (prop.Value != null) {
                                     l.Add(ParseNotificationProperty(prop.Key, prop.Value.AsObject()));
                                 }
                             }
-                            properties = l.ToArray();
+                            properties = [.. l];
                         }
                         break;
                     // Handled in NotificationBase
@@ -877,9 +1046,9 @@ namespace ApiGenerator {
             }
         }
 
-        public void WriteDataDefinitions() {
-            int i = 0;
-            string modelFolder = Path.Combine(_targetFolder, "Models");
+        public void Generate(string targetFolder, string targetNamespace) {
+            WritePathsDefinitions(targetFolder, targetNamespace);
+            string modelFolder = Path.Combine(targetFolder, "Models");
             if (!Directory.Exists(modelFolder)) {
                 Directory.CreateDirectory(modelFolder);
             }
@@ -887,49 +1056,69 @@ namespace ApiGenerator {
                 //ClearDirectory(modelFolder);
             }
 
+            var modelFiles = Directory.GetFiles(modelFolder, "*.cs").ToList();
+            List<string> newFiles =
+            [
+                .. WriteDataDefinitions(modelFolder, targetNamespace),
+                .. WriteNotificationDefinitions(modelFolder, targetFolder, targetNamespace),
+            ];
+            // Remove old files
+            var oldFiles = modelFiles.Except(newFiles);
+            foreach (var item in oldFiles) {
+                File.Delete(item);
+            }
+
+        }
+
+        private List<string> WriteDataDefinitions(string modelFolder, string targetNamespace) {
+            int i = 0;
+            var modelsFile = Directory.GetFiles(".", "models-*.json").OrderByDescending(p => p).FirstOrDefault() ?? throw new Exception("Error reading models");
+            var models = JsonSerializer.Deserialize<List<DefinitionModel>>(File.ReadAllText(modelsFile)) ?? throw new Exception("Error parsing models");
             Console.Write("Writing models ");
-            foreach (var def in _models) {
+            List<string> files = [];
+            foreach (var def in models) {
                 if (string.IsNullOrEmpty(def.Name)) {
                     throw new Exception("Name of data object must not be null");
                 }
                 if (++i % 100 == 0) {
                     Console.Write(".");
                 }
-                using var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"));
-                writer.WriteLine($"using {_namespace};");
+                var filename = Path.Combine(modelFolder, def.Name + ".cs");
+                files.Add(filename);
+                using var writer = new StreamWriter(filename);
+                writer.WriteLine($"using {targetNamespace};");
                 writer.WriteLine("using System;");
                 writer.WriteLine("using System.Collections.Generic;");
                 writer.WriteLine("using System.Runtime.Serialization;");
                 writer.WriteLine("using System.Text.Json.Serialization;");
                 writer.WriteLine();
-                writer.WriteLine($"namespace {_namespace}.Models {{");
+                writer.WriteLine($"namespace {targetNamespace}.Models {{");
                 WriteModelDefinition(def, writer, 1);
                 writer.WriteLine("}");
 
             }
             Console.WriteLine();
             Console.WriteLine(i + " models written.");
+            return files;
         }
-        public void WriteNotificationDefinitions() {
+        private List<string> WriteNotificationDefinitions(string modelFolder, string targetFolder, string targetNamespace) {
             int i = 0;
-            string modelFolder = Path.Combine(_targetFolder, "Models");
-            if (!Directory.Exists(modelFolder)) {
-                Directory.CreateDirectory(modelFolder);
-            }
-            else {
-                //ClearDirectory(modelFolder);
-            }
-            var alias = _notificationModels.Where(p => p.Alias != null).ToArray();
+            var notificationsFile = Directory.GetFiles(".", "notifications-*.json").OrderByDescending(p => p).FirstOrDefault() ?? throw new Exception("Error reading notifications");
+            var notificationModels = JsonSerializer.Deserialize<List<DefinitionModel>>(File.ReadAllText(notificationsFile)) ?? throw new Exception("Error parsing notification models");
+            var alias = notificationModels.Where(p => p.Alias != null).ToArray();
             Console.Write("Writing notification models ");
-            foreach (var def in _notificationModels.Where(p => p.Alias == null)) {
+            List<string> files = [];
+            foreach (var def in notificationModels.Where(p => p.Alias == null)) {
                 if (string.IsNullOrEmpty(def.Name)) {
                     throw new Exception("Name of data object must not be null");
                 }
                 if (++i % 100 == 0) {
                     Console.Write(".");
                 }
-                using var writer = new StreamWriter(Path.Combine(modelFolder, def.Name + ".cs"));
-                writer.WriteLine($"using {_namespace};");
+                var filename = Path.Combine(modelFolder, def.Name + ".cs");
+                files.Add(filename);
+                using var writer = new StreamWriter(filename);
+                writer.WriteLine($"using {targetNamespace};");
                 writer.WriteLine("using System;");
                 writer.WriteLine("using System.Collections.Generic;");
                 writer.WriteLine("using System.Runtime.Serialization;");
@@ -944,22 +1133,22 @@ namespace ApiGenerator {
                 //if (def.IsAlias) {
                 //    writer.WriteLine($"using {def.Name} = {def.T}
                 //}
-                writer.WriteLine($"namespace {_namespace}.Models {{");
+                writer.WriteLine($"namespace {targetNamespace}.Models {{");
                 WriteModelDefinition(def, writer, 1);
                 writer.WriteLine("}");
 
             }
             Console.WriteLine();
             Console.WriteLine(i + " notification models written.");
-            using (var writer = new StreamWriter(Path.Combine(_targetFolder, "NotificationChannelTopicMap.cs"))) {
-                writer.WriteLine($"using {_namespace}.Models;");
+            using (var writer = new StreamWriter(Path.Combine(targetFolder, "NotificationChannelTopicMap.cs"))) {
+                writer.WriteLine($"using {targetNamespace}.Models;");
                 writer.WriteLine();
-                writer.WriteLine($"namespace {_namespace} {{");
+                writer.WriteLine($"namespace {targetNamespace} {{");
                 writer.WriteIndent(1).WriteLine("public partial class NotificationChannel {");
                 writer.WriteIndent(2).WriteLine("static private readonly Dictionary<string, TopicTypeInfo> _topicTypeMap = new() {");
                 foreach (var item in _topicTypeMap) {
                     writer.WriteIndent(3).Write($"{{ \"{item.Key}\", new TopicTypeInfo(typeof({item.Value.TypeName}),  ");
-                    if (item.Value.TopicParameters?.Any() == true) {
+                    if (item.Value.TopicParameters?.Length > 0) {
                         writer.WriteLine($"new string[] {{ {string.Join(", ", item.Value.TopicParameters.Select(p => $"\"{p}\""))} }}) }},");
                     }
                     else {
@@ -970,28 +1159,44 @@ namespace ApiGenerator {
                 writer.WriteIndent(1).WriteLine("}");
                 writer.WriteLine("}");
             }
+            return files;
         }
-        private static ApiOperation CreateApiOperation(SwaggerOperation op) {
+        private ApiOperation CreateApiOperation(SwaggerOperation op) {
+            if (op.Responses != null) {
+                foreach (SwaggerResponse item in _swaggerResponses) {
+                    if (op.Responses.SingleOrDefault(p => p.Name == item.Name) == null) {
+                        op.Responses = [item, .. op.Responses];
+                    }
+                }
+            }
+            else {
+                op.Responses = _swaggerResponses;
+            }
             var operation = new ApiOperation() {
                 Id = op.OperationId,
                 IsDeprecated = op.Deprecated,
                 Responses = op.Responses?.Select(p => CreateApiResponse(op.OperationId, p)),
                 Method = op.Method,
-            PurecloudMethodName = op.PurecloudMethodName,
-            Produces = op.Produces,
-            Consumes = op.Consumes,
+                PurecloudMethodName = op.PurecloudMethodName,
+                Produces = op.Produces,
+                Consumes = op.Consumes,
 
                 Parameters = op.Parameters?.Select(p => CreateApiParameter(p)).ToList(),
                 Path = op.Path,
                 Summary = (op.Summary ?? op.Description) ?? "",
+                Description = op.Summary != null ? op.Description ?? "" : "",
                 Tags = op.Tags,
                 Permissions = op.Security?.Select(p => new ApiPermisson() { PermissionType = p.Key, Permissions = p.Value })
             };
+
+            
+
             return operation;
         }
         private static ApiOperationParameter CreateApiParameter(SwaggerParameter p) {
-            ApiOperationParameter param = new();
-            param.Name = p.Name;
+            ApiOperationParameter param = new() {
+                Name = p.Name
+            };
             if (p.Ref != null) {
                 param.TypeName = p.Ref.Replace("#/definitions/", "");
             }
@@ -1046,23 +1251,30 @@ namespace ApiGenerator {
             return response;
         }
 
-        public void WritePathsDefinitions() {
-            string apiFolder = Path.Combine(_targetFolder, "Api");
+        private void WritePathsDefinitions(string targetFolder, string targetNamespace) {
+            string apiFolder = Path.Combine(targetFolder, "Api");
             if (!Directory.Exists(apiFolder)) {
                 Directory.CreateDirectory(apiFolder);
             }
             int i = 0;
             Console.WriteLine("Writing apis ");
+            var apiFile = Directory.GetFiles(".", "apis-*.json").OrderByDescending(p => p).FirstOrDefault() ?? throw new Exception("Error reading notifications");
+            var apis = JsonSerializer.Deserialize<Dictionary<string, List<ApiOperation>>>(File.ReadAllText(apiFile)) ?? throw new Exception("Error parsing notification models");
+            var apiFiles = Directory.GetFiles(apiFolder, "*.cs").ToList();
+            List<string> newFiles = new();
+
             //var groups = _apis.Select(p => p.Name).Distinct().OrderBy(p => p);
-            foreach (var group in _apis) {
+            foreach (var group in apis) {
                 if (++i % 10 == 0) {
                     Console.Write(".");
                 }
 
                 //if (!path.Name.StartsWith(group)) {
                 string groupName = CreateName(group.Key);
-                StreamWriter? writer = new(Path.Combine(apiFolder, groupName + "Api.cs"));
-                writer.WriteLine($"using {_namespace}.Models;");
+                var filename = Path.Combine(apiFolder, groupName + "Api.cs");
+                newFiles.Add(filename);
+                StreamWriter? writer = new(filename);
+                writer.WriteLine($"using {targetNamespace}.Models;");
                 writer.WriteLine("using Microsoft.AspNetCore.Http.Extensions;");
                 writer.WriteLine("using Microsoft.Extensions.Logging;");
                 writer.WriteLine("using Microsoft.Extensions.Logging.Abstractions;");
@@ -1075,7 +1287,7 @@ namespace ApiGenerator {
                 writer.WriteLine("using System.Text.Json.Serialization;");
                 writer.WriteLine("using System.Threading.Tasks;");
                 writer.WriteLine();
-                writer.WriteLine($"namespace {_namespace} {{");
+                writer.WriteLine($"namespace {targetNamespace} {{");
                 writer.WriteLine($"\tpublic class {groupName}Api {{");
                 writer.WriteLine("\t\tprivate readonly ConnectionManager _connectionManager;");
                 writer.WriteLine("\t\tprivate readonly ILogger _logger;");
@@ -1098,6 +1310,12 @@ namespace ApiGenerator {
                 writer.Close();
             }
             Console.WriteLine();
+            // Remove old files
+            var oldFiles = apiFiles.Except(newFiles);
+            foreach (var item in oldFiles) {
+                File.Delete(item);
+            }
+
             Console.WriteLine(i + " apis written.");
         }
         private void WriteOperation(ApiOperation operation, StreamWriter writer, int indent) {
@@ -1121,7 +1339,9 @@ namespace ApiGenerator {
                 if (operation.Description != null) {
                     writer.WriteIndent(indent + 1).WriteLine("/// <remarks>");
                     foreach (var item in operation.Description.Split("\n")) {
-                        writer.WriteIndent(indent + 1).WriteLine($"/// {item}");
+                        if (item.Length > 0) {
+                            writer.WriteIndent(indent + 1).WriteLine($"/// {item}");
+                        }
                     }
                     if (operation.Permissions?.Any() == true) {
                         foreach (var item in operation.Permissions) {
@@ -1154,6 +1374,9 @@ namespace ApiGenerator {
                     }
                     writer.WriteIndent(indent + 1).WriteLine("/// </remarks>");
                 }
+            }
+            if (operation.IsDeprecated) {
+                writer.WriteIndent(indent + 1).WriteLine("[Obsolete]");
             }
             // TODO: check successful response
             string response = "void";
@@ -1295,11 +1518,11 @@ namespace ApiGenerator {
             }
             writer.WriteLine();
             writer.WriteIndent(indent + 2).WriteLine("// make the HTTP request");
-            writer.WriteLine("#pragma warning disable IDE0017 // Simplify object initialization");
-            writer.WriteIndent(indent + 2).WriteLine("var uri = new UriBuilder(httpClient.BaseAddress);");
-            writer.WriteLine("#pragma warning restore IDE0017 // Simplify object initialization");
-            writer.WriteIndent(indent + 2).WriteLine("uri.Path = requestPath;");
-
+            //writer.WriteLine("#pragma warning disable IDE0017 // Simplify object initialization");
+            writer.WriteIndent(indent + 2).WriteLine("var uri = new UriBuilder(httpClient.BaseAddress) {");
+            //writer.WriteLine("#pragma warning restore IDE0017 // Simplify object initialization");
+            writer.WriteIndent(indent + 3).WriteLine("Path = requestPath");
+            writer.WriteIndent(indent + 2).WriteLine("};");
             if (operation.Parameters?.Any(p => p.Position == ApiOperationParameter.ParameterKind.Query) == true) {
                 writer.WriteIndent(indent + 2).WriteLine("uri.Query = q_.ToString();");
             }
@@ -1310,8 +1533,8 @@ namespace ApiGenerator {
                 writer.WriteIndent(indent + 2).WriteLine($"using HttpContent content = JsonContent.Create({bodyParam.Name}, new MediaTypeWithQualityHeaderValue(\"application/json\"));");
                 writer.WriteIndent(indent + 2).WriteLine("request.Content = content;");
             }
-            List<string> consumes = new();
-            if(_apiDefaults.Consumes?.Any() == true) {
+            List<string> consumes = [];
+            if(_apiDefaults.Consumes?.Length > 0) {
                 consumes.AddRange(_apiDefaults.Consumes);
             }
             if (operation.Consumes?.Any() == true) {
@@ -1408,145 +1631,6 @@ namespace ApiGenerator {
         }
 
 
-        private static SecurityScheme ParseSecurityObject(string key, JsonObject value) {
-            string? schemeType = null;
-            string? description = null;
-            string? parameterName = null;
-            string? in_ = null;
-            string? flow = null;
-            string? authorizationUrl = null;
-            string? tokenUrl = null;
-            IEnumerable<Scope>? scopes = null;
-            foreach (var item in value.AsObject()) {
-                switch (item.Key) {
-                    case "type":
-                        schemeType = item.Value?.ToString();
-                        break;
-                    case "description":
-                        description = item.Value?.ToString();
-                        break;
-                    case "name":
-                        parameterName = item.Value?.ToString();
-                        break;
-                    case "in":
-                        in_ = item.Value?.ToString();
-                        break;
-                    case "flow":
-                        flow = item.Value?.ToString();
-                        break;
-                    case "authorizationUrl":
-                        authorizationUrl = item.Value?.ToString();
-                        break;
-                    case "tokenUrl":
-                        tokenUrl = item.Value?.ToString();
-                        break;
-                    case "scopes":
-                        if (item.Value is JsonObject) {
-                            scopes = ParseScopes(item.Value.AsObject());
-                        }
-                        else {
-                            throw new Exception("Security scopes must be a JsonObject");
-                        }
-                        break;
-                    default:
-                        throw new Exception("Unknown paramter in security scheme");
-                }
-            }
-            switch (schemeType) {
-                case "basic":
-                    return new BasicSecurityScheme(key) { Description = description };
-                case "apiKey":
-                    if (string.IsNullOrEmpty(parameterName)) {
-                        throw new Exception("Missing name in SecurityScheme");
-                    }
-                    if (string.IsNullOrEmpty(in_)) {
-                        throw new Exception("Missing \"in\" in SecurityScheme");
-                    }
-                    return new ApiKeySecurityScheme(parameterName, in_, key);
-                case "oauth2":
-                    if (string.IsNullOrEmpty(flow)) {
-                        throw new Exception("Missing flow in SecurityScheme");
-                    }
-                    if (string.IsNullOrEmpty(authorizationUrl)) {
-                        throw new Exception("Missing authorizationUrl in SecurityScheme");
-                    }
-                    if (string.IsNullOrEmpty(tokenUrl)) {
-                        if (flow != "implicit") {
-                            throw new Exception("Missing tokenUrl in SecurityScheme");
-                        }
-                    }
-                    if (scopes == null) {
-                        throw new Exception("Missing scopes in SecurityScheme");
-                    }
-                    return new OAuth2SecurityScheme(flow, authorizationUrl, tokenUrl, scopes, key);
-                default:
-                    throw new Exception("Unknown security scheme type " + schemeType);
-            }
-        }
-        private static IEnumerable<Scope> ParseScopes(JsonObject scopes) {
-            List<Scope> scopesList = new();
-            foreach (var item in scopes.AsObject()) {
-                if (item.Value == null) {
-                    throw new Exception("Description of scope must not be empty");
-                }
-                scopesList.Add(new Scope(item.Key, item.Value.ToString()));
-            }
-            return scopesList;
-        }
-        private static TagDescription ParseTag(JsonObject tag) {
-            string? name = null;
-            string? description = null;
-            Documentation? externalDocs = null;
-            foreach (var item in tag.AsObject()) {
-                switch (item.Key) {
-                    case "name":
-                        name = item.Value?.ToString();
-                        break;
-                    case "description":
-                        description = item.Value?.ToString();
-                        break;
-                    case "externalDocs":
-                        if (item.Value is JsonObject) {
-                            externalDocs = ParseExternalDocs(item.Value.AsObject());
-                        }
-                        else {
-                            throw new Exception("ExternalDos must be an JsonObject");
-                        }
-                        break;
-                    default:
-                        throw new Exception("Unknown element " + item.Key + " in tags.");
-                }
-            }
-            if (string.IsNullOrEmpty(name)) {
-                throw new Exception("Name of tag must not be empty");
-            }
-            return new TagDescription(name) {
-                Description = description,
-                ExternalDocumentation = externalDocs
-            };
-        }
-        private static Documentation ParseExternalDocs(JsonObject externalDocs) {
-            string? url = null;
-            string? description = null;
-            foreach (var item in externalDocs.AsObject()) {
-                switch (item.Key) {
-                    case "url":
-                        url = item.Value?.ToString();
-                        break;
-                    case "description":
-                        description = item.Value?.ToString();
-                        break;
-                    default:
-                        throw new Exception("Unknown element " + item.Key + " in externalDocs.");
-                }
-            }
-            if (string.IsNullOrEmpty(url)) {
-                throw new Exception("Url of tag must not be empty");
-            }
-            return new Documentation(url) {
-                Description = description
-            };
-        }
 
         static void WriteModelDefinition(DefinitionModel model, StreamWriter writer, int indent) {
 
@@ -1621,16 +1705,30 @@ namespace ApiGenerator {
             //return sb.ToString();
         }
 
+        [GeneratedRegex("(-[A-Za-z])")]
+        private static partial Regex NameRegex();
+        [GeneratedRegex("(-[0-9])")]
+        private static partial Regex NameNumberRegex();
+        [GeneratedRegex("(_[A-Za-z])")]
+        private static partial Regex NameToUpperRegex();
+        [GeneratedRegex("(/[A-Za-z])")]
+        private static partial Regex NameToUpper2Regex();
+        [GeneratedRegex("(:[A-Za-z0-9])")]
+        private static partial Regex NameToUpper3Regex();
+        [GeneratedRegex("(\\$[A-Za-z0-9])")]
+        private static partial Regex NameToUpper4Regex();
+        [GeneratedRegex("(\\.[A-Za-z0-9])")]
+        private static partial Regex NameToUpper5Regex();
         internal static string CreateName(string jsonName, bool lower = false) {
-            string name = Regex.Replace(jsonName, "(-[A-Za-z])", (p) => p.Value[1..].ToUpper());
-            name = Regex.Replace(name, "(-[0-9])", (p) => "_" + p.Value[1..]);
-            if (name != name.ToUpper()) {
-                name = Regex.Replace(name, "(_[A-Za-z])", (p) => p.Value[1..].ToUpper());
+            string name = NameRegex().Replace(jsonName, (p) => p.Value[1..].ToUpper());
+            name = NameNumberRegex().Replace(name, (p) => "_" + p.Value[1..]);
+            if (!name.Equals(name, StringComparison.OrdinalIgnoreCase)) {
+                name = NameToUpperRegex().Replace(name, (p) => p.Value[1..].ToUpper());
             }
-            name = Regex.Replace(name, "(/[A-Za-z])", (p) => p.Value[1..].ToUpper());
-            name = Regex.Replace(name, "(:[A-Za-z0-9])", (p) => "_" + p.Value[1..].ToUpper());
-            name = Regex.Replace(name, "(\\$[A-Za-z0-9])", (p) => p.Value[1..].ToUpper());
-            name = Regex.Replace(name, "(\\.[A-Za-z0-9])", (p) => p.Value[1..].ToUpper());
+            name = NameToUpper2Regex().Replace(name, (p) => p.Value[1..].ToUpper());
+            name = NameToUpper3Regex().Replace(name, (p) => "_" + p.Value[1..].ToUpper());
+            name = NameToUpper4Regex().Replace(name, (p) => p.Value[1..].ToUpper());
+            name = NameToUpper5Regex().Replace(name, (p) => p.Value[1..].ToUpper());
             if (Char.IsNumber(name[0])) {
                 name = "_" + name;
             }
@@ -1643,7 +1741,7 @@ namespace ApiGenerator {
             if (name == "GetType") {
                 name += "_";
             }
-            if (name.EndsWith("$")) {
+            if (name.EndsWith('$')) {
                 name = name.Substring(0,name.Length-1);
             }
             return name;
@@ -1656,9 +1754,7 @@ namespace ApiGenerator {
             if (writer == null) {
                 throw new ArgumentException("Writer must not be null", nameof(writer));
             }
-            if (value < 0) {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
             writer.Write(string.Join("\t", Enumerable.Repeat("", value)));
             return writer;
         }

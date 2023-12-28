@@ -15,7 +15,7 @@ namespace ApiGenerator {
                 switch (item.Key) {
                     case "tags":
                         if(item.Value is JsonArray) {
-                            List<string> tags = new List<string>();
+                            List<string> tags = new();
                             foreach (var t in item.Value.AsArray()) {
                                 if (t != null) {
                                     tags.Add(t.ToString());
@@ -43,7 +43,7 @@ namespace ApiGenerator {
                         break;
                     case "produces":
                         if (item.Value is JsonArray) {
-                            List<string> l = new List<string>();
+                            List<string> l = new();
                             foreach (var p in item.Value.AsArray()) {
                                 if (p != null) {
                                     l.Add(p.ToString());
@@ -57,7 +57,7 @@ namespace ApiGenerator {
                         break;
                     case "consumes":
                         if (item.Value is JsonArray) {
-                            List<string> l = new List<string>();
+                            List<string> l = new();
                             foreach (var p in item.Value.AsArray()) {
                                 if (p != null) {
                                     l.Add(p.ToString());
@@ -87,8 +87,8 @@ namespace ApiGenerator {
                         if(item.Value is JsonObject) {
                             List<SwaggerResponse> l = new();
                             foreach (var r in item.Value.AsObject()) {
-                                if(r.Value is JsonObject)
-                                l.Add(new SwaggerResponse(r.Key, (JsonObject)r.Value));
+                                if(r.Value is JsonObject @object)
+                                l.Add(new SwaggerResponse(r.Key, @object));
                             }
                             Responses = l.ToArray();
                         }

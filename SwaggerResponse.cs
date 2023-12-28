@@ -19,6 +19,8 @@ namespace ApiGenerator {
                             Content = new SwaggerBase((JsonObject)item.Value);
                         }
                         break;
+                    case "headers":
+                        break;
                     case "x-inin-error-codes":
                         if(item.Value is JsonObject) {
                             IninErrorCodes = new();

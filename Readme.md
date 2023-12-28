@@ -14,41 +14,50 @@ At the moment it only generates a .NET project and source files.
 To build the application clone the repo and run from the main directory ```dotnet publish -c Release -r <rid>``` where ```<rid>``` is the runtime identifier.
 For possible RIDs see [Using RID](https://learn.microsoft.com/en-us/dotnet/core/rid-catalog#using-rids).
 
-The generation of the API project needs 3 calls of the application with different parameters:
+Alternatively you could generate a nuget package and install it as a dotnet tool. For this run ```dotnet pack ApiGenerator.csproj -c Release -p= PublishSingleFile=false -o <output directory>```.
 
-1. Run ```ApiGenerator swagger -h <hostname> -t <target folder> [ --namespace <ApiNamespace>]``` with:
+Example: ```dotnet pack ApiGenerator.csproj -c Release -p= PublishSingleFile=false -o ./nuget```.
+
+To install the tool for your project call ```dotnet new tool-manifest``` to create a manifest file and then install the tool with ```dotnet tool install --add-source <package location> ApiGenerator```  
+where 'package location' is the path to the created nuget package or the URL, where the package is uploaded.
+
+Example: ```dotnet tool install --add-source .\Genesys-ApiGenerator\nuget ApiGenerator```
+
+The generation of the API project works in 3 steps. To check changes in the downloaded data, the names of all genereated files contain 
+the year and week of the dates, when they are generated: yyyy-ww with yyyy: the year and ww: the ISOWeek
+
+1. Run ```ApiGenerator readswagger -h <hostname>``` with:
 - hostname: The host to download the swagger file (example: api.mypurecloud.de)
-- target folder: The folder, where the project is created. The folder must exist.
-- namespace (optional): The namespace of the generated code. Default: GenesysCloud.Client.V2
 
-Example: ```ApiGenerator -h api.mypurecloud.de -t D:\MyProjects\GenesysApi --namespace MyNamespace ```
+Example: ```ApiGenerator -h api.mypurecloud.de ```
 
-This will download the swagger from https://api.mypurecloud.de/api/v2/docs/swagger and generate the SDK code with ```namespace MyNamespace``` in the directory ```D:\MyProjects\GenesysApi```.
+This will download the swagger file from https://api.mypurecloud.de/api/v2/docs/swagger, stores it in publicapi-v2-{build}.json and generate the description files.
 
-2. To get the type information of notification events are not part of the swagger file. To get this informaten run ```ApiGenerator readnotification --clientId <cliendId> --clientSecret  <clientSecret> --environment <environment>``` with:
+2. The type information of notification events are not part of the swagger file. To get this informaten run ```ApiGenerator readnotification --clientId <cliendId> --clientSecret  <clientSecret> --environment <environment>``` with:
 - clientId: The client id for the request.
 - clientSecret: The clientSecret for the request.
 - environment: The environment to get the information from (Example: mypurecloud.de).
 
 Example: ```ApiGenerator readnotification --clientId ************** --clientSecret  ******************** --environment mypurecloud.de ```
 
-This will login with the given credentials get the list of available topics from the api and store them in ```notificationSchema.json``` in the current directory.
+This will login with the given credentials get the list of available topics from the api and store them in ```notificationSchema-{yyyy-ww}.json``` and generates the description file ```notifications-{yyyy-ww}.json``` in the current directory.
 
-3. To generate the notification the code from the previous step run ```ApiGenerator notification -i <inputfile> -t <target folder> [ --namespace <ApiNamespace>]``` with:
-- inputfile: The notification file created in the step above.
+After this, the following files are generated in the currect directory:
+- publicapi-v2-{yyyy-ww}.json: The swagger file downloaded from Genesys.
+- apis.json-{yyyy-ww}: The definition of the api calls parsed from swagger file.
+- models-{yyyy-ww}.json: The definition of the data models parsed from the swagger file.
+- notificationSchema-{yyyy-ww}.json: The definitons of the topic data read from Genesys (step 2, see avove)
+- notifications-{yyyy-ww}.json: The notification data parsed from the topic data.
+
+3. To generate the the SDK code run ```ApiGenerator generate -t <target folder> [ --namespace <ApiNamespace>]``` with:
 - target folder: The folder, where the project is created. 
 - namespace (optional): The namespace of the generated code. Default: GenesysCloud.Client.V2
 
-Example: ```ApiGenerator notification -i .\notificationSchema.json -t -t D:\MyProjects\GenesysApi --namespace MyNamespace ```
+Example: ```ApiGenerator generate -t D:\MyProjects\GenesysApi --namespace MyNamespace ```
 
-This will read the notification definitions and gerenate the SDK files in the target folder.
+This will read the description files (api-*.json, models-*.json and notifications-*.json) and gerenate the SDK files in the target folder.
 
-The generator will create some files in the current directory:
-- publicapi-v2-latest.json: The swagger file downloaded from Genesys.
-- apis.json: The definition of the api calls parsed from swagger file.
-- models.json: The definition of the data models parsed from the swagger file.
-- notificationSchema.json: The definitons of the topic data read from Genesys (step 2, see avove)
-- notifications.json: The notification data parsed from the topic data.
+Alternatively you could run all steps at once with ```ApiGenerator all -h <hostname> --clientId ************** --clientSecret  ******************** --environment mypurecloud.de -t <target folder> [ --namespace <ApiNamespace>]```
 
 To generate the SDK run ```dotnet build -c Release``` from target folder.
 

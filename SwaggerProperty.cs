@@ -94,7 +94,6 @@ namespace ApiGenerator {
                         break;
                     default:
                         break;
-                        //throw new Exception($"Unknown key {item.Key} in property");
 
                 }
             }
