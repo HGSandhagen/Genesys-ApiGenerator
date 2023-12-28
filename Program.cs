@@ -146,11 +146,14 @@ int RunGenerate(GenerateOptions opts) {
     CreateCodeFile("ApiGenerator.DateTimeInterval.txt", Path.Combine(opts.TargetFolder, "DateTimeInterval.cs"), opts.TargetNamespace);
     CreateCodeFile("ApiGenerator.GenesysCloudCredentials.txt", Path.Combine(opts.TargetFolder, "GenesysCloudCredentials.cs"), opts.TargetNamespace);
     CreateCodeFile("ApiGenerator.JsonEnumMemberStringEnumConverter.txt", Path.Combine(opts.TargetFolder, "JsonEnumMemberStringEnumConverter.cs"), opts.TargetNamespace);
-    if (!File.Exists(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"))) {
+    //if (!File.Exists(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"))) {
         CreateCodeFile("ApiGenerator.Project.txt", Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), opts.TargetNamespace);
+        var projectFile = File.ReadAllText(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"));
+        projectFile.Replace("##Version##", build);
+        File.WriteAllText(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), projectFile.Replace("##Version##", build));
 
         //File.WriteAllText(Path.Combine(opts.TargetFolder, $"{opts.TargetNamespace}.csproj"), File.ReadAllText(Path.Combine(appDirectory, "Project.txt")));
-    }
+    //}
     if (withNotification) {
 
         CreateCodeFile("ApiGenerator.NotificationChannel.txt", Path.Combine(opts.TargetFolder, "NotificationChannel.cs"), opts.TargetNamespace);
